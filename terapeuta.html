@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calma en Movimiento | Panel del Kinesiólogo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f8f6;
+    --card: #ffffff;
+    --card-subtle: #f8faf9;
+    --ink: #142823;
+    --muted: #536c65;
+    --acc: #1e7b5e;
+    --acc-hover: #16634b;
+    --acc-light: #eaf6f1;
+    --line: #d8e5e0;
+    --warn: #925f00;
+    --warn-bg: #fff8e6;
+    --warn-line: #f1dfa8;
+    --danger: #c0392b;
+    --danger-light: #fdeeed;
+    --success: #27ae60;
+    --success-light: #eafaf1;
+    --radius: 16px;
+    --shadow: 0 4px 20px -2px rgba(20, 40, 35, 0.07);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1715;
+      --card: #15221f;
+      --card-subtle: #192925;
+      --ink: #eaf3f0;
+      --muted: #95aca4;
+      --acc: #38b88f;
+      --acc-hover: #4cd4a7;
+      --acc-light: rgba(56, 184, 143, 0.12);
+      --line: #263833;
+      --warn: #f0be5c;
+      --warn-bg: #282110;
+      --warn-line: #453616;
+      --danger: #e74c3c;
+      --danger-light: rgba(231, 76, 60, 0.14);
+      --success: #2ecc71;
+      --success-light: rgba(46, 204, 113, 0.14);
+      --shadow: 0 4px 24px -2px rgba(0, 0, 0, 0.45);
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .app-container {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 18px 20px 60px;
+  }
+
+  /* Top Navigation Bar */
+  header.top-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 14px 20px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 18px;
+  }
+
+  .nav-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .nav-title h1 {
+    margin: 0;
+    font-size: 1.3rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+  }
+  .role-pill {
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    background: var(--acc-light);
+    color: var(--acc);
+    padding: 3px 9px;
+    border-radius: 999px;
+  }
+
+  .nav-status {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 10px;
+    background: var(--card-subtle);
+    border: 1px solid var(--line);
+  }
+  .status-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #bbb;
+  }
+  .status-dot.online { background: var(--success); box-shadow: 0 0 8px var(--success); }
+  .status-dot.connecting { background: var(--warn); }
+  .status-dot.offline { background: var(--danger); }
+
+  .room-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--acc-light);
+    border: 1.5px solid var(--acc);
+    color: var(--acc);
+    padding: 4px 10px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 800;
+  }
+  .room-input {
+    border: none;
+    background: transparent;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: inherit;
+    width: 125px;
+    text-transform: uppercase;
+    text-align: center;
+  }
+  .room-input:focus { outline: none; }
+
+  /* Fallback Offline Banner */
+  #offlineBanner {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 18px;
+    background: var(--warn-bg);
+    border: 1.5px solid var(--warn-line);
+    border-radius: var(--radius);
+    color: var(--warn);
+    font-weight: 600;
+    font-size: 0.95rem;
+    margin-bottom: 18px;
+  }
+  #offlineBanner.visible { display: flex; }
+
+  /* Main Grid */
+  .main-grid {
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: 20px;
+  }
+  @media (max-width: 900px) {
+    .main-grid { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 22px;
+    box-shadow: var(--shadow);
+    margin-bottom: 20px;
+  }
+  .card h2 {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin: 0 0 16px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  /* Remote Mirror Panel */
+  .mirror-box {
+    background: var(--card-subtle);
+    border: 1.5px dashed var(--line);
+    border-radius: 14px;
+    padding: 18px;
+    margin-bottom: 16px;
+    text-align: center;
+  }
+  .mirror-phase-title {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--acc);
+    margin-bottom: 6px;
+  }
+  .mirror-desc {
+    color: var(--muted);
+    font-size: 0.92rem;
+    margin-bottom: 14px;
+  }
+
+  .mirror-buttons-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+  }
+
+  /* Pain Scale Grid */
+  .pain-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 8px;
+    margin-top: 10px;
+  }
+  @media (max-width: 600px) {
+    .pain-grid { grid-template-columns: repeat(4, 1fr); }
+  }
+
+  .btn-pain {
+    font-weight: 800;
+    font-size: 1.05rem;
+    min-height: 52px;
+    border-radius: 10px;
+    border: 1px solid rgba(0,0,0,0.1);
+    color: #fff;
+    cursor: pointer;
+    transition: transform 0.12s ease, filter 0.15s ease;
+  }
+  .btn-pain:hover:not(:disabled) {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+  }
+  .btn-pain:active:not(:disabled) { transform: translateY(1px); }
+
+  /* Standard Buttons */
+  button.action-btn {
+    min-height: 48px;
+    font-size: 1rem;
+    font-weight: 700;
+    border-radius: 12px;
+    border: 0;
+    background: var(--acc);
+    color: #ffffff;
+    cursor: pointer;
+    padding: 10px 16px;
+    transition: background 0.15s ease, transform 0.12s ease;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+  }
+  button.action-btn:hover:not(:disabled) {
+    background: var(--acc-hover);
+    transform: translateY(-1px);
+  }
+  button.action-btn:active:not(:disabled) { transform: translateY(1px); }
+  button.action-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  button.secondary-btn {
+    background: transparent;
+    color: var(--acc);
+    border: 2px solid var(--acc);
+  }
+  button.secondary-btn:hover:not(:disabled) {
+    background: var(--acc-light);
+  }
+  button.danger-btn {
+    background: var(--danger);
+  }
+  button.danger-btn:hover:not(:disabled) {
+    background: #a93226;
+  }
+
+  /* Live Metrics Chips */
+  .chips-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .chip {
+    background: var(--card-subtle);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px 12px;
+    text-align: center;
+  }
+  .chip-label {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--muted);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+  .chip-value {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--acc);
+    margin-top: 2px;
+  }
+
+  /* Form Elements */
+  label {
+    display: block;
+    font-size: 0.88rem;
+    font-weight: 600;
+    margin: 12px 0 5px;
+    color: var(--ink);
+  }
+  select, input[type=text], textarea {
+    width: 100%;
+    min-height: 44px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1.5px solid var(--line);
+    background: var(--bg);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 0.95rem;
+  }
+  select:focus, input:focus, textarea:focus {
+    outline: none;
+    border-color: var(--acc);
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  @media (max-width: 500px) {
+    .form-row { grid-template-columns: 1fr; }
+  }
+
+  .notes-box {
+    margin-top: 14px;
+  }
+  textarea.summary-area {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 0.85rem;
+    min-height: 120px;
+    background: var(--card-subtle);
+  }
+</style>
+</head>
+<body>
+<div class="app-container">
+
+  <!-- Top Navigation & Live Connection Bar -->
+  <header class="top-nav">
+    <div class="nav-title">
+      <span style="font-size:1.6rem;">🩺</span>
+      <div>
+        <h1>Calma en Movimiento</h1>
+        <span class="role-pill">Panel de Supervisión Terapéutica</span>
+      </div>
+    </div>
+
+    <div class="nav-status">
+      <div class="status-badge" id="serverBadge">
+        <span class="status-dot connecting" id="serverDot"></span>
+        <span id="serverStatusText">Conectando...</span>
+      </div>
+
+      <div class="status-badge" id="headsetBadge">
+        <span style="font-size:1.1rem;">🥽</span>
+        <span id="headsetStatusText">Esperando visor...</span>
+      </div>
+
+      <div class="room-pill">
+        <span>SALA:</span>
+        <input type="text" id="roomCodeInput" class="room-input" maxlength="20" value="HOSPITAL-1" title="Código de sesión compartido">
+        <button id="changeRoomBtn" type="button" style="border:0; background:transparent; cursor:pointer; color:inherit; font-size:1rem;" title="Cambiar Sala">🔄</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Fallback Offline Banner -->
+  <div id="offlineBanner">
+    <div>
+      <b>⚠️ Sin conexión al servidor de sincronización.</b> La sesión del visor continúa en modo autónomo.
+    </div>
+    <button id="retryWsBtn" class="action-btn secondary-btn" style="width:auto; min-height:36px; padding:6px 14px;">Reintentar conexión</button>
+  </div>
+
+  <main class="main-grid">
+
+    <!-- COLUMNA IZQUIERDA: Tarjeta Espejo y Control Remoto en Vivo -->
+    <section>
+      <div class="card">
+        <h2>
+          <span>🪞 Tarjeta Espejo (Vista del Paciente en VR)</span>
+          <span id="currentPhaseBadge" class="role-pill" style="font-size:0.8rem;">Fase: -</span>
+        </h2>
+
+        <div class="mirror-box">
+          <div id="mirrorTitle" class="mirror-phase-title">Cargando estado del visor...</div>
+          <div id="mirrorLines" class="mirror-desc">Esperando que el paciente inicie la sesión en el visor.</div>
+          <div id="mirrorButtonsContainer" class="mirror-buttons-grid">
+            <!-- Botones espejo inyectados dinámicamente según la fase -->
+          </div>
+        </div>
+
+        <div style="border-top: 1px solid var(--line); padding-top: 14px;">
+          <label style="margin-top:0; color:var(--muted);">Control Clínico Directo de Emergencia</label>
+          <p id="sessionNote" style="margin:4px 0 0; font-size:0.9rem; color:var(--muted);"></p>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:8px;">
+            <button id="directPauseBtn" class="action-btn secondary-btn" type="button">⏸ Pausar</button>
+            <button id="directRecenterBtn" class="action-btn secondary-btn" type="button" style="border-color:var(--acc); color:var(--acc); font-weight:700;">🎯 Recentrar</button>
+            <button id="directFinishBtn" class="action-btn danger-btn" type="button">⏹ Finalizar</button>
+          </div>
+          <button id="newSessionBtn" class="action-btn secondary-btn" type="button" style="margin-top:10px;">🔄 Nueva sesión (limpiar pantalla)</button>
+        </div>
+      </div>
+
+      <!-- Configuración Clínica Dinámica -->
+      <div class="card">
+        <h2>⚙️ Parámetros de la Intervención</h2>
+        <div style="margin-bottom:12px;">
+          <label for="cfgMode">Actividad Terapéutica</label>
+          <select id="cfgMode">
+            <option value="apples">🍎 Cosecha del Manzano (Alcance + Agarre + Transporte)</option>
+            <option value="lights">🌸 Jardín de Luces (Alcance y Toque Espacial)</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <div>
+            <label for="cfgZone">Zona Corporal Evaluada</label>
+            <select id="cfgZone"></select>
+          </div>
+          <div>
+            <label for="cfgSide">Lado a Intervenir</label>
+            <select id="cfgSide">
+              <option value="right">Derecho</option>
+              <option value="left">Izquierdo</option>
+              <option value="both">Bilateral</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div>
+            <label for="cfgPos">Posición del Paciente</label>
+            <select id="cfgPos">
+              <option value="sitting">Sentado</option>
+              <option value="standing">De pie</option>
+            </select>
+          </div>
+          <div>
+            <label for="cfgMin">Duración máxima de la sesión</label>
+            <select id="cfgMin">
+              <option value="3">3 minutos</option>
+              <option value="5" selected>5 minutos</option>
+              <option value="8">8 minutos</option>
+              <option value="12">12 minutos</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <label for="cfgReps">Objetivos / Aciertos a Cumplir (Meta de Repeticiones)</label>
+          <select id="cfgReps">
+            <option value="5">5 aciertos (Sesión suave / inicio)</option>
+            <option value="10" selected>10 aciertos (Estándar recomendado)</option>
+            <option value="15">15 aciertos (Intermedio)</option>
+            <option value="20">20 aciertos (Tolerancia media)</option>
+            <option value="30">30 aciertos (Desafío avanzado)</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <div>
+            <label for="cfgDwell">Tiempo de cada objetivo en pantalla</label>
+            <select id="cfgDwell">
+              <option value="5">5 segundos</option>
+              <option value="8">8 segundos</option>
+              <option value="10" selected>10 segundos</option>
+              <option value="15">15 segundos</option>
+              <option value="20">20 segundos</option>
+            </select>
+          </div>
+          <div>
+            <label for="cfgSize">Tamaño del objetivo</label>
+            <select id="cfgSize">
+              <option value="large">Grande</option>
+              <option value="medium" selected>Mediano</option>
+              <option value="small">Pequeño</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label for="cfgFeedback">Retroalimentación</label>
+          <select id="cfgFeedback">
+            <option value="both" selected>Visual y sonora</option>
+            <option value="visual">Solo visual</option>
+            <option value="sound">Solo sonora</option>
+          </select>
+        </div>
+
+        <button id="applyCfgBtn" class="action-btn" type="button" style="margin-top:16px;">
+          📤 Enviar Configuración al Visor
+        </button>
+        <p id="cfgStatus" role="status" style="min-height:1.4em; margin:10px 0 0; font-size:0.9rem; color:var(--muted);"></p>
+        <p id="cfgActive" style="margin:4px 0 0; font-size:0.85rem; color:var(--muted);"></p>
+      </div>
+    </section>
+
+    <!-- COLUMNA DERECHA: Telemetría en Vivo y Reporte Clínico -->
+    <section>
+      <!-- Telemetría en Vivo -->
+      <div class="card">
+        <h2>📊 Métricas Clínicas en Vivo</h2>
+                <div style="margin: 12px 0 16px 0; background: var(--card-subtle); padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line);">
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.9rem; font-weight:700; color:var(--ink); margin-bottom:8px;">
+            <span>📈 Progreso de Aciertos</span>
+            <span id="progressPercent" style="color:var(--acc); font-size:1.05rem;">0% (0 / 10)</span>
+          </div>
+          <div style="background:var(--line); border-radius:999px; height:12px; overflow:hidden;">
+            <div id="progressBarFill" style="background:linear-gradient(90deg, #2a9d8f, #56e2b6); height:100%; width:0%; transition:width 0.3s ease;"></div>
+          </div>
+        </div>
+<div class="chips-grid">
+          <div class="chip">
+            <div class="chip-label">🎯 Aciertos</div>
+            <div class="chip-value" id="chipHits">0 / 0</div>
+          </div>
+          <div class="chip">
+            <div class="chip-label">⏱️ Tiempo Activo</div>
+            <div class="chip-value" id="chipTime" style="font-size:1.25rem;">00:00</div>
+          </div>
+          <div class="chip">
+            <div class="chip-label">📏 Alcance Máximo</div>
+            <div class="chip-value" id="chipMaxReach">0.00 m</div>
+          </div>
+          <div class="chip">
+            <div class="chip-label">⚡ Delta Dolor (EVN)</div>
+            <div class="chip-value" id="chipPainDelta">-</div>
+          </div>
+        </div>
+
+        <div style="background:var(--card-subtle); padding:10px 14px; border-radius:10px; font-size:0.88rem; color:var(--muted); line-height:1.5;">
+          • <b>Dolor inicial (EVN):</b> <span id="valPainBefore" style="font-weight:700; color:var(--ink);">-</span><br>
+          • <b>Dolor final (EVN):</b> <span id="valPainAfter" style="font-weight:700; color:var(--ink);">-</span><br>
+          • <b>Satisfacción (1-5):</b> <span id="valSatisfaction" style="font-weight:700; color:var(--ink);">-</span><br>
+          • <b>Pausas solicitadas:</b> <span id="valPauses" style="font-weight:700; color:var(--ink);">0</span><br>
+          • <b>Objetivos presentados / resueltos:</b> <span id="valAttempts" style="font-weight:700; color:var(--ink);">0 / 0</span><br>
+          • <b>Manos detectadas por el visor:</b> <span id="valHands" style="font-weight:700; color:var(--ink);">-</span><br>
+          • <b>Cómo terminó:</b> <span id="valEndReason" style="font-weight:700; color:var(--ink);">-</span>
+        </div>
+      </div>
+
+      <!-- Reporte y Ficha Clínica -->
+      <div class="card">
+        <h2>📝 Reporte para Ficha Clínica</h2>
+        <div class="notes-box">
+          <label for="therapistNotes">Observaciones del Kinesiólogo</label>
+          <textarea id="therapistNotes" rows="2" placeholder="Compensaciones biomecánicas, tolerancia del paciente, comentarios..."></textarea>
+
+          <label for="summaryText">Resumen Clínico Formateado</label>
+          <textarea id="summaryText" class="summary-area" readonly></textarea>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;">
+            <button id="copySummaryBtn" class="action-btn secondary-btn" type="button">📋 Copiar Resumen</button>
+            <button id="downloadCsvBtn" class="action-btn" type="button">💾 Descargar CSV</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.4.0 · prototipo no validado clínicamente</p>
+<script type="module" src="./terapeuta.js"></script>
+</body>
+</html>

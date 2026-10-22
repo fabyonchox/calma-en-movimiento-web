@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calma en Movimiento | VR Meta Quest 3</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f4f8f6;
+    --card: #ffffff;
+    --ink: #142823;
+    --muted: #526b64;
+    --acc: #1e7b5e;
+    --acc-hover: #16634b;
+    --acc-light: #eaf6f1;
+    --line: #d8e5e0;
+    --focus: rgba(30, 123, 94, 0.25);
+    --radius: 20px;
+    --shadow: 0 12px 36px -4px rgba(20, 40, 35, 0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1715;
+      --card: #15221f;
+      --ink: #eaf3f0;
+      --muted: #95aca4;
+      --acc: #38b88f;
+      --acc-hover: #4cd4a7;
+      --acc-light: rgba(56, 184, 143, 0.12);
+      --line: #263833;
+      --focus: rgba(56, 184, 143, 0.35);
+      --shadow: 0 12px 40px -4px rgba(0, 0, 0, 0.5);
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+  }
+  main {
+    width: 100%;
+    max-width: 640px;
+    padding: 30px 20px;
+  }
+  .patient-card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 38px 28px;
+    box-shadow: var(--shadow);
+    text-align: center;
+    transition: transform 0.2s ease;
+  }
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 999px;
+    background: var(--acc-light);
+    color: var(--acc);
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  h1 {
+    font-size: 2.3rem;
+    font-weight: 800;
+    margin: 0 0 10px;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+  }
+  p.sub {
+    margin: 0 auto 28px;
+    color: var(--muted);
+    font-size: 1.08rem;
+    max-width: 480px;
+    line-height: 1.55;
+  }
+
+  .instructions-box {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 20px 22px;
+    margin: 0 auto 30px;
+    text-align: left;
+    font-size: 0.95rem;
+  }
+  .inst-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+    margin-bottom: 14px;
+  }
+  .inst-item:last-child {
+    margin-bottom: 0;
+  }
+  .inst-icon {
+    font-size: 1.4rem;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+  .inst-text b {
+    color: var(--ink);
+    display: block;
+    margin-bottom: 2px;
+  }
+  .inst-text span {
+    color: var(--muted);
+    line-height: 1.45;
+  }
+
+  /* Giant VR Button for Patient */
+  
+  /* Selector de Casco / Sala */
+  .helmet-selector-box {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px 18px;
+    margin: 0 auto 24px;
+    text-align: center;
+  }
+  .helmet-label {
+    display: block;
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 12px;
+  }
+  .helmet-pills {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+  .helmet-pill {
+    padding: 10px 8px;
+    font-size: 0.95rem;
+    font-weight: 700;
+    border-radius: 12px;
+    border: 2px solid var(--line);
+    background: var(--card);
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.18s ease;
+    font-family: inherit;
+  }
+  .helmet-pill:hover {
+    border-color: var(--acc);
+    color: var(--ink);
+  }
+  .helmet-pill.active {
+    border-color: var(--acc);
+    background: var(--acc-light);
+    color: var(--acc);
+    box-shadow: 0 4px 12px var(--focus);
+  }
+  .helmet-sub {
+    font-size: 0.84rem;
+    color: var(--muted);
+  }
+  .helmet-sub b {
+    color: var(--acc);
+  }
+
+  button.giant-vr-btn {
+    width: 100%;
+    min-height: 74px;
+    font-size: 1.35rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    border: 0;
+    border-radius: 18px;
+    background: var(--acc);
+    color: #ffffff;
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(30, 123, 94, 0.35);
+    transition: transform 0.15s ease, background 0.18s ease, box-shadow 0.18s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+  }
+  button.giant-vr-btn:hover:not(:disabled) {
+    background: var(--acc-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(30, 123, 94, 0.45);
+  }
+  button.giant-vr-btn:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  button.giant-vr-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+
+  #status {
+    margin: 18px 0 0;
+    min-height: 1.4em;
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--acc);
+    text-align: center;
+  }
+
+  footer {
+    margin-top: 24px;
+    text-align: center;
+  }
+  .therapist-link {
+    color: var(--muted);
+    font-size: 0.88rem;
+    text-decoration: none;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 8px;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+  .therapist-link:hover {
+    color: var(--acc);
+    background: var(--card);
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="patient-card">
+    <div class="badge">🌸 Calma en Movimiento • WebXR</div>
+    <h1>Bienvenido/a</h1>
+    <p class="sub">Rehabilitación inmersiva en realidad virtual para aliviar el dolor y recuperar tu movimiento en calma.</p>
+
+    <div class="instructions-box">
+      <div class="inst-item">
+        <span class="inst-icon">🪑</span>
+        <div class="inst-text">
+          <b>Postura cómoda y relajada</b>
+          <span>Siéntate con los pies apoyados y hombros descansados.</span>
+        </div>
+      </div>
+      <div class="inst-item">
+        <span class="inst-icon">🥽</span>
+        <div class="inst-text">
+          <b>Ponte tu visor Meta Quest</b>
+          <span>Ajusta las correas para ver nítido y a tu propio ritmo.</span>
+        </div>
+      </div>
+      <div class="inst-item">
+        <span class="inst-icon">🤲</span>
+        <div class="inst-text">
+          <b>Supervisión y control natural</b>
+          <span>Tu kinesiólogo acompaña tu sesión en vivo. Puedes usar tus manos libres o los mandos.</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Selector de Casco / Sala de Supervisión Clínica -->
+    <div class="helmet-selector-box">
+      <span class="helmet-label">Selecciona este Casco Meta Quest:</span>
+      <div class="helmet-pills" id="helmetPills">
+        <button type="button" class="helmet-pill" data-room="HOSPITAL-1">🎧 Casco 1</button>
+        <button type="button" class="helmet-pill" data-room="HOSPITAL-2">🎧 Casco 2</button>
+        <button type="button" class="helmet-pill" data-room="HOSPITAL-3">🎧 Casco 3</button>
+      </div>
+      <span class="helmet-sub" id="currentRoomText">Supervisión enlazada a: <b>HOSPITAL-1</b></span>
+    </div>
+
+    <!-- Botón gigante de entrada para el paciente -->
+    <button id="enterBtn" class="giant-vr-btn" type="button">
+      <span>🥽 Entrar en Realidad Virtual (Quest 3)</span>
+    </button>
+    <p id="status" role="status"></p>
+  </div>
+
+  <footer>
+    <a href="/terapeuta" class="therapist-link" target="_blank">🩺 Panel del Kinesiólogo (Tablet) →</a>
+    <div style="margin-top:10px; font-size:0.8rem; opacity:0.7;">Versión 0.4.0 · prototipo no validado clínicamente</div>
+  </footer>
+</main>
+
+<script type="module" src="./game.js"></script>
+
+<script>
+  (function() {
+    const pills = document.querySelectorAll('.helmet-pill');
+    const label = document.getElementById('currentRoomText');
+    const params = new URLSearchParams(window.location.search);
+    let current = params.get('sala') || params.get('code') || localStorage.getItem('calma_room_code') || 'HOSPITAL-1';
+    current = current.toUpperCase().trim();
+
+    function updateActive(room) {
+      current = room;
+      try { localStorage.setItem('calma_room_code', room); } catch(e) {}
+      pills.forEach(p => {
+        if (p.getAttribute('data-room') === room) {
+          p.classList.add('active');
+        } else {
+          p.classList.remove('active');
+        }
+      });
+      if (label) label.innerHTML = 'Supervisión enlazada a: <b>' + room + '</b>';
+    }
+
+    pills.forEach(p => {
+      p.addEventListener('click', () => {
+        const r = p.getAttribute('data-room');
+        updateActive(r);
+      });
+    });
+
+    updateActive(current);
+  })();
+</script>
+</body>
+</html>
