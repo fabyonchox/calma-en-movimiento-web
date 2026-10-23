@@ -1,4 +1,5 @@
 import * as THREE from './libs/three.module.min.js';
+import { FairScene } from './feria_escena.js';
 import {
   DEFAULTS, ZONES, SIZES, MESSAGES, normalizeConfig, mergeConfig, REMOTE_KEYS, effectiveDistances, pickTarget,
   horizontalDistance, distance, formatTime, newRecord, buildCSV, buildSummary,
@@ -15,6 +16,7 @@ const f2 = (n) => n.toFixed(2);
 const ORB_COLORS = [0xfff3a0, 0xa0e3ff, 0xa8f0cf]; // amarillo claro, celeste, verde menta
 
 let renderer, scene, camera, anchor, menuPanel, hudPanel, orb, popRing, session, audioCtx, ambient;
+let fairScene = null; // escenario Feria de juegos
 let treeGroup, basketGroup, targetAppleGroup, harvestedApplesGroup, basketRimGlow;
 const baskets = []; // canasto izquierdo y derecho
 
@@ -162,6 +164,7 @@ function initForm() {
       },
       onConfigUpdate: (newCfg) => {
         const wasApples = S.cfg ? S.cfg.gameMode === 'apples' : true;
+        const wasMode = S.cfg ? S.cfg.gameMode : 'apples';
         // La tablet manda: solo se aceptan los campos permitidos y se normalizan (rangos, textos válidos).
         S.cfg = mergeConfig(S.cfg, newCfg);
         try { localStorage.setItem(CFG_KEY, JSON.stringify({ ...S.cfg, code: '' })); } catch (e) { /* ok */ }
@@ -172,6 +175,14 @@ function initForm() {
         if (S.reach) S.dist = effectiveDistances(S.cfg, S.reach);
 
         const isApples = S.cfg.gameMode === 'apples';
+        // Feria: se rearma con el lado/tamaño nuevos, pero nunca en pleno juego (se cambia al terminar).
+        if (isFair() && S.reach && S.phase !== 'play' && S.phase !== 'pause') layoutFair();
+        if (wasMode !== S.cfg.gameMode && (wasMode === 'fair' || isFair()) && S.phase === 'play') {
+          // Cambiar desde o hacia la feria a mitad del juego: se cierra la ronda limpiamente.
+          if (fairScene) fairScene.clear();
+          if (isFair() && !layoutFair()) S.cfg.gameMode = wasMode;
+          else if (isFair()) fairScene.start();
+        }
         if (wasApples !== isApples) {
           if (treeGroup) treeGroup.visible = isApples;
           if (basketGroup) basketGroup.visible = isApples;
@@ -852,6 +863,7 @@ function initThree() {
   buildAppleTree();
   buildBasket();
   buildTargetApple();
+  fairScene = new FairScene(THREE, anchor, fairHost());
   for (let i = 0; i < 2; i++) {
     const h = new THREE.Group();
     h.add(
@@ -1277,11 +1289,12 @@ async function enterVR() {
 }
 
 function resetCounters() {
+  if (fairScene) fairScene.clear();
   Object.assign(S, {
     rec: newRecord(S.cfg), committed: false, activeMs: 0, spawned: 0, resolved: 0, hits: 0, pauses: 0,
     reachSum: 0, maxReach: 0, target: null, prevPos: null, age: 0, popT: -1, nextSpawnAt: 0, msgIdx: 0, endedEarly: false, endReason: '',
     targetPoints: [], sparkT: -1,
-    heldApple: null, droppingApple: null, harvestedCount: 0,
+    heldApple: null, droppingApple: null, harvestedCount: 0, repsDoneAt: 0,
   });
   if (orb) orb.visible = false;
   if (targetAppleGroup) targetAppleGroup.visible = false;
@@ -1499,7 +1512,7 @@ function getActiveTouchPoints() {
 function getModeBadge() {
   const isHands = usingHands();
   return {
-    text: (S.cfg && S.cfg.gameMode === 'apples' ? '🍎 MANZANO • ' : '🌸 LUCES • ') + (isHands ? '🖐️ MANOS' : '🎮 MANDOS'),
+    text: (S.cfg && S.cfg.gameMode === 'apples' ? '🍎 MANZANO • ' : S.cfg && S.cfg.gameMode === 'fair' ? '🎪 FERIA • ' : '🌸 LUCES • ') + (isHands ? '🖐️ MANOS' : '🎮 MANDOS'),
     bg: isHands ? 'rgba(86, 226, 182, 0.22)' : 'rgba(255, 209, 102, 0.18)',
     border: isHands ? 'rgba(86, 226, 182, 0.6)' : 'rgba(255, 209, 102, 0.55)',
     color: isHands ? '#a8f5df' : '#ffe188'
@@ -1559,17 +1572,37 @@ function phaseModel() {
       };
     case 'painBefore':
       return { panel: 'menu', model: { title: '¿Cuánto dolor o molestia tienes en este momento?', lines: ['0 = Sin ningún dolor        10 = Máximo dolor imaginable'], buttons: painButtons('painB', 0, 10), cols: 6 } };
-    case 'ready':
+    case 'ready': {
+      const next = MODE_ORDER[(MODE_ORDER.indexOf(cfg.gameMode) + 1) % MODE_ORDER.length];
+      const toggle = { id: 'toggleMode', label: 'Modo: ' + MODE_NAME[cfg.gameMode] + ' (Cambiar a ' + MODE_NAME[next] + ')', secondary: true };
+      const how = cfg.gameMode === 'apples'
+        ? 'Toma la manzana (pellizco o gatillo) y déjala en el canasto izquierdo o derecho.'
+        : cfg.gameMode === 'fair'
+          ? 'Toma una pelota de la bandeja (pellizco o gatillo) y lánzala para botar los tarros. Suéltala para lanzar.'
+          : 'Toca las luces mágicas con tus dedos o con el mando, a tu propio ritmo.';
+      if (cfg.gameMode === 'fair' && S.fairOk === false) {
+        return {
+          panel: 'menu',
+          model: {
+            badge: getModeBadge(),
+            title: 'La feria no cabe con este alcance',
+            lines: ['Para que tarros y bandeja queden dentro de tu alcance cómodo se necesita un poco más de espacio.', 'Elige otra actividad.'],
+            buttons: [toggle, { id: 'recalib', label: 'Medir el alcance otra vez', secondary: true }],
+            cols: 1,
+          },
+        };
+      }
       return {
         panel: 'menu',
         model: {
           badge: getModeBadge(),
           title: 'Gracias, todo listo para comenzar',
-          lines: [(cfg.gameMode === 'apples' ? 'Toma la manzana (pellizco o gatillo) y déjala en el canasto izquierdo o derecho.' : 'Toca las luces mágicas con tus dedos o con el mando, a tu propio ritmo.'), 'No hay prisa. Puedes pausar o descansar cuando quieras.'],
-          buttons: [{ id: 'start', label: 'Comenzar experiencia' }, { id: 'toggleMode', label: (cfg.gameMode === 'apples' ? 'Modo: 🍎 Manzano (Cambiar a 🌸 Luces)' : 'Modo: 🌸 Luces (Cambiar a 🍎 Manzano)'), secondary: true }],
+          lines: [how, 'No hay prisa. Puedes pausar o descansar cuando quieras.'],
+          buttons: [{ id: 'start', label: 'Comenzar experiencia' }, toggle],
           cols: 1,
         },
       };
+    }
     case 'play':
       // En el visor NO se muestra progreso ni tiempo: eso lo ve solo el evaluador en la tablet.
       // Queda un único botón de Pausa (la pausa ofrece "Continuar" y "Finalizar sesión").
@@ -1579,7 +1612,7 @@ function phaseModel() {
           title: '',
           titleSize: 22,
           lineSize: 26,
-          lines: [MESSAGES[S.msgIdx]],
+          lines: [S.msgIdx === 0 && cfg.gameMode === 'fair' ? 'Toma una pelota y lánzala hacia los tarros.' : S.msgIdx === 0 && cfg.gameMode === 'apples' ? 'Toma la manzana y déjala en el canasto.' : MESSAGES[S.msgIdx]],
           buttons: [{ id: 'pause', label: 'Pausa', secondary: true }],
           cols: 1,
         },
@@ -1629,6 +1662,19 @@ function phaseModel() {
         },
       };
     }
+    case 'rest':
+      // Sala de descanso: la sesión ya terminó y quedó guardada, pero el paciente sigue dentro del jardín.
+      // El evaluador puede iniciar otra sesión desde la tablet sin que nadie tenga que volver a entrar a VR.
+      return {
+        panel: 'menu',
+        model: {
+          title: 'Sesión finalizada',
+          lineSize: 28,
+          lines: ['Gracias por participar. Puedes descansar con calma.', 'Tu kinesiólogo continuará contigo.'],
+          buttons: [{ id: 'leave', label: 'Salir de realidad virtual', secondary: true }],
+          cols: 1,
+        },
+      };
     case 'bye':
       return { panel: 'menu', model: { title: 'Sesión finalizada', lines: ['Puedes quitarte el visor con calma. Gracias por participar.'] } };
     default:
@@ -1739,6 +1785,27 @@ function onSelect(c, src = 'select') {
   onButton(id, c);
 }
 
+// Otra sesión sin salir de VR. Solo desde el resumen o la sala de descanso: nunca borra una sesión en juego.
+function startAnotherSession(recalibrate) {
+  if (!['results', 'rest'].includes(S.phase)) return;
+  commitRecord();
+  resetCounters();
+  baskets.forEach((b) => { b.count = 0; if (b.glow) b.glow.material.opacity = 0.2; });
+  if (harvestedApplesGroup) {
+    while (harvestedApplesGroup.children.length > 0) {
+      harvestedApplesGroup.remove(harvestedApplesGroup.children[0]);
+    }
+  }
+  S.ended = false;
+  if (recalibrate) {
+    // Paciente nuevo: se vuelve a medir el alcance cómodo.
+    S.reach = null;
+    S.phase = 'calib';
+  } else {
+    S.phase = 'painBefore';
+  }
+}
+
 let lastButtonActionTime = 0;
 function onButton(id, c, isRemote = false) {
   const now = performance.now();
@@ -1759,7 +1826,9 @@ function onButton(id, c, isRemote = false) {
     case 'pause': pausePlay(); break;
     case 'resume': resumePlay(); break;
     case 'toggleMode':
-      S.cfg.gameMode = S.cfg.gameMode === 'apples' ? 'lights' : 'apples';
+      S.cfg.gameMode = MODE_ORDER[(MODE_ORDER.indexOf(S.cfg.gameMode) + 1) % MODE_ORDER.length];
+      if (S.rec && !S.committed) S.rec.gameMode = S.cfg.gameMode;
+      if (isFair()) layoutFair();
       resetCounters();
       S.nextSpawnAt = performance.now() + 600;
       break;
@@ -1770,17 +1839,14 @@ function onButton(id, c, isRemote = false) {
     case 'adv': if (S.rec) S.rec.adverse = v === 'yes'; S.phase = 'results'; break;
     case 'again':
     case 'new_session':
-      // Nueva sesión: se guarda la anterior, se parte con contadores en cero y se vuelve a preguntar el dolor.
-      commitRecord();
-      resetCounters();
-      baskets.forEach((b) => { b.count = 0; if (b.glow) b.glow.material.opacity = 0.2; });
-      if (harvestedApplesGroup) {
-        while (harvestedApplesGroup.children.length > 0) {
-          harvestedApplesGroup.remove(harvestedApplesGroup.children[0]);
-        }
-      }
-      S.ended = false;
-      S.phase = 'painBefore';
+      startAnotherSession(false);
+      break;
+    case 'recalib':
+      // Desde "listo para comenzar": volver a medir el alcance (no borra datos, la sesión aún no empieza).
+      if (S.phase === 'ready') { S.reach = null; S.phase = 'calib'; }
+      break;
+    case 'new_session_calib':
+      startAnotherSession(true);
       break;
     case 'skipQ':
       // Omitir una pregunta de la encuesta final: queda vacía (no 0).
@@ -1798,11 +1864,60 @@ function onButton(id, c, isRemote = false) {
       // Recentrar el jardín según la posición actual de la cabeza (no mientras hay una manzana en la mano).
       if (['calib', 'painBefore', 'ready', 'pause', 'play'].includes(S.phase) && !S.heldApple && !S.droppingApple) placeAnchor();
       break;
-    case 'done': commitRecord(); S.phase = 'bye'; S.byeAt = performance.now() + 3000; break;
+    case 'done': commitRecord(); S.phase = 'rest'; break;
+    case 'leave':
+      // Salir de realidad virtual: solo desde el resumen o la sala de descanso.
+      if (['results', 'rest'].includes(S.phase)) {
+        commitRecord();
+        S.phase = 'bye';
+        S.byeAt = performance.now() + 3000;
+      }
+      break;
     default: break;
   }
   broadcastState();
   broadcastMetrics();
+}
+
+/* ================= Feria de juegos ================= */
+
+const MODE_ORDER = ['apples', 'lights', 'fair'];
+const MODE_NAME = { apples: '🍎 Manzano', lights: '🌸 Luces', fair: '🎪 Feria' };
+const isFair = () => !!(S.cfg && S.cfg.gameMode === 'fair');
+
+function fairHost() {
+  return {
+    controllers: () => handCtrls().filter(ctrlActive),
+    handLocal: (c) => handLocal(c),
+    grasping: (c) => isControllerGrasping(c),
+    haptic: (ms, k) => triggerHaptic(ms, k),
+    sound: (kind) => { if (kind === 'can') chime(); },
+    // Cada pelota lanzada es un intento.
+    onThrow: (info) => {
+      S.spawned++;
+      const pt = { x: info.pos.x, y: info.pos.y, z: info.pos.z, hit: false };
+      S.targetPoints.push(pt);
+      broadcastMetrics();
+      return pt;
+    },
+    // Cada tarro derribado es un acierto. El alcance es el de la mano al soltar la pelota que lo botó.
+    onCan: (info) => {
+      S.hits++;
+      S.reachSum += info.reach;
+      S.maxReach = Math.max(S.maxReach, info.reach);
+      S.msgIdx = 1 + (S.hits % (MESSAGES.length - 1));
+      broadcastMetrics();
+    },
+    onResolved: () => { S.resolved++; },
+  };
+}
+
+// Arma la feria dentro del alcance cómodo. Devuelve false si con ese alcance no cabe de forma segura.
+function layoutFair() {
+  if (!fairScene || !S.cfg || !S.reach) return false;
+  S.dist = effectiveDistances(S.cfg, S.reach);
+  S.fairOk = fairScene.configure(S.cfg, S.dist, S.eyeH || 1.15);
+  return S.fairOk;
 }
 
 function measureReach(c) {
@@ -1827,6 +1942,7 @@ function measureReach(c) {
   }
   S.reach = Math.min(1.3, r);
   S.calibHint = '';
+  if (isFair()) layoutFair();
   S.phase = 'painBefore';
 }
 
@@ -1834,6 +1950,11 @@ function measureReach(c) {
 
 function startPlay() {
   S.dist = effectiveDistances(S.cfg, S.reach);
+  if (isFair()) {
+    // La feria necesita espacio para mostrador y bandeja dentro del alcance cómodo.
+    if (!layoutFair()) { S.phase = 'ready'; return; }
+    fairScene.start();
+  }
   S.phase = 'play';
   S.nextSpawnAt = performance.now() + 1000;
 }
@@ -1854,6 +1975,8 @@ function resumePlay() {
 }
 
 function endPlay(early, reason) {
+  // Feria: se limpia la zona (pelotas del suelo, tarros de vuelta, bandejas llenas).
+  if (fairScene) fairScene.clear();
   if (orb) orb.visible = false;
   if (sparkPoints) sparkPoints.visible = false;
   if (targetAppleGroup) targetAppleGroup.visible = false;
@@ -1874,8 +1997,7 @@ function finishRequested(isRemote) {
     S.phase = 'results';
   } else if (S.phase === 'results') {
     commitRecord();
-    S.phase = 'bye';
-    S.byeAt = performance.now() + 3000;
+    S.phase = 'rest';
   } else if (['settle', 'calib', 'painBefore', 'ready', 'play', 'pause'].includes(S.phase)) {
     endPlay(true, reason);
   }
@@ -2058,8 +2180,10 @@ function update(dt, now) {
   updatePointers();
 
   const isApplesMode = !!(S.cfg && S.cfg.gameMode === 'apples');
+  const isFairMode = isFair();
   if (treeGroup) treeGroup.visible = isApplesMode;
   if (basketGroup) basketGroup.visible = isApplesMode;
+  if (fairScene) fairScene.setVisible(isFairMode && fairScene.ready() && !['settle', 'calib', 'bye'].includes(S.phase));
 
   if (S.phase !== 'play') return;
 
@@ -2071,8 +2195,21 @@ function update(dt, now) {
 
   // --- Juego activo ---
   S.activeMs += dt * 1000;
-  if (S.activeMs >= S.cfg.minutes * 60000 && !S.heldApple && !S.droppingApple) {
+  if (S.activeMs >= S.cfg.minutes * 60000 && !S.heldApple && !S.droppingApple && !(isFairMode && fairScene.holding())) {
     endPlay(false, 'time');
+    return;
+  }
+
+  // ===================== MODO 3: FERIA DE JUEGOS =====================
+  if (isFairMode) {
+    if (orb) orb.visible = false;
+    if (targetAppleGroup) targetAppleGroup.visible = false;
+    if (fairScene.ready()) fairScene.step(dt, now);
+    // Meta por ACIERTOS (tarros derribados). Se espera un momento para que el último tarro termine de caer.
+    if (S.hits >= S.cfg.reps) {
+      if (!S.repsDoneAt) S.repsDoneAt = now + 1200;
+      else if (now >= S.repsDoneAt && !fairScene.holding()) { S.repsDoneAt = 0; endPlay(false, 'reps'); }
+    }
     return;
   }
 
@@ -2314,4 +2451,4 @@ function loop() {
 
 initForm();
 
-export const __test = { S, update, onButton, phaseModel, enterVR, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get anchor() { return anchor; } };
+export const __test = { S, update, onButton, phaseModel, enterVR, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get anchor() { return anchor; } };

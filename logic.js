@@ -9,7 +9,7 @@ export const SIZES = { small: 0.05, medium: 0.075, large: 0.10 };
 // Valores iniciales "seguros" de la Fase 4. La permanencia (10 s) y el rango lateral (0,5 m)
 // son valores medios/de la guía; el equipo debe confirmarlos.
 export const DEFAULTS = {
-  gameMode: 'apples', // apples | lights
+  gameMode: 'apples', // apples | lights | fair
   code: '',
   zone: 'Hombro',
   side: 'right', // right | left | both
@@ -42,7 +42,7 @@ const num = (v, d) => (Number.isFinite(Number(v)) && v !== '' && v !== null ? Nu
 
 export function normalizeConfig(raw = {}) {
   const c = { ...DEFAULTS, ...raw };
-  c.gameMode = ['apples', 'lights'].includes(c.gameMode) ? c.gameMode : 'apples';
+  c.gameMode = ['apples', 'lights', 'fair'].includes(c.gameMode) ? c.gameMode : 'apples';
   c.code = String(c.code || '').replace(/[^\w\- ]/g, '').trim().slice(0, 20);
   if (!ZONES.includes(c.zone)) c.zone = DEFAULTS.zone;
   if (!['right', 'left', 'both'].includes(c.side)) c.side = DEFAULTS.side;

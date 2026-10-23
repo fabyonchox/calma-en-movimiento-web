@@ -50,7 +50,7 @@ const mirrorButtonsContainer = $('mirrorButtonsContainer');
 
 const SIDE_ES = { right: 'Derecho', left: 'Izquierdo', both: 'Bilateral' };
 const POS_ES = { sitting: 'Sentado', standing: 'De pie' };
-const MODE_ES = { apples: 'Cosecha del Manzano', lights: 'Jardín de Luces' };
+const MODE_ES = { apples: 'Cosecha del Manzano', lights: 'Jardín de Luces', fair: 'Feria de Juegos' };
 const CFG_FIELDS = {
   gameMode: 'cfgMode', zone: 'cfgZone', side: 'cfgSide', position: 'cfgPos',
   minutes: 'cfgMin', reps: 'cfgReps', dwell: 'cfgDwell', size: 'cfgSize', feedback: 'cfgFeedback',
@@ -376,6 +376,12 @@ function renderMirrorState(state) {
     return;
   }
 
+  // Sala de descanso: el paciente sigue dentro de VR y el evaluador decide qué sigue desde la tablet.
+  if (currentPhase === 'rest') {
+    appendRestControls();
+    return;
+  }
+
   // 3. Botones estándar de la tarjeta enviados por el visor
   if (model.buttons && model.buttons.length > 0) {
     for (const b of model.buttons) {
@@ -395,6 +401,27 @@ function renderMirrorState(state) {
   emptyNote.style.fontSize = '0.9rem';
   emptyNote.textContent = '(Sin botones interactivos en esta pantalla)';
   mirrorButtonsContainer.appendChild(emptyNote);
+}
+
+// Sala de descanso: la sesión terminó y quedó guardada; el paciente sigue dentro del jardín.
+function appendRestControls() {
+  const mk = (label, cls, fn) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'action-btn ' + cls;
+    b.textContent = label;
+    b.style.width = '100%';
+    b.style.marginTop = '8px';
+    b.onclick = fn;
+    mirrorButtonsContainer.appendChild(b);
+  };
+  mk('▶ Nueva sesión (mismo paciente, mismo alcance)', '', () => startNewSessionInVR(false));
+  mk('🎯 Nueva sesión con calibración (otro paciente)', 'secondary-btn', () => startNewSessionInVR(true));
+  mk('⏏ Cerrar realidad virtual', 'secondary-btn', () => {
+    if (confirm('¿Cerrar la realidad virtual del paciente? Después habrá que volver a tocar «Entrar en Realidad Virtual» en el visor.')) {
+      triggerRemoteButton('leave');
+    }
+  });
 }
 
 // La encuesta final nunca bloquea: se puede omitir una pregunta o terminar sin responder (queda vacío).
@@ -421,6 +448,7 @@ function updateSessionNote() {
   if (!el) return;
   if (currentPhase === 'play') el.textContent = 'Juego en curso.';
   else if (currentPhase === 'pause') el.textContent = 'Juego en pausa.';
+  else if (currentPhase === 'rest') el.textContent = 'Sesión finalizada. El paciente sigue dentro de la realidad virtual.';
   else if (currentPhase === 'idle') el.textContent = currentMetrics.sessionEnded ? 'La última sesión terminó.' : 'Sin sesión en curso.';
   else el.textContent = '';
 }
@@ -552,7 +580,21 @@ function applyLocalReset() {
   renderMetrics({});
 }
 
+function startNewSessionInVR(recalibrate) {
+  if (!isConnected) {
+    setCfgStatus('Sin conexión con el servidor. No se pudo enviar.', 'warn');
+    return;
+  }
+  applyLocalReset();
+  triggerRemoteButton(recalibrate ? 'new_session_calib' : 'new_session');
+}
+
 function startNewSession() {
+  // Paciente en la sala de descanso (sigue en VR): se parte otra sesión sin salir.
+  if (currentPhase === 'rest' || currentPhase === 'results') {
+    startNewSessionInVR(false);
+    return;
+  }
   // No se limpia la pantalla si el visor está en medio de una sesión.
   const busy = lastState && !['idle', 'results', 'bye'].includes(currentPhase);
   if (busy) {
@@ -569,7 +611,7 @@ function startNewSession() {
 $('directPauseBtn').onclick = () => triggerRemoteButton(currentPhase === 'pause' ? 'resume' : 'pause');
 $('directRecenterBtn').onclick = () => triggerRemoteButton('recenter');
 $('directFinishBtn').onclick = () => {
-  if (confirm('¿Confirmas finalizar la sesión del paciente ahora?')) {
+  if (confirm('¿Confirmas finalizar la sesión del paciente ahora? El paciente seguirá dentro de la realidad virtual.')) {
     triggerRemoteButton('finish');
   }
 };
