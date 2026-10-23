@@ -176,7 +176,7 @@ function initForm() {
 
         const isApples = S.cfg.gameMode === 'apples';
         // Feria: se rearma con el lado/tamaño nuevos, pero nunca en pleno juego (se cambia al terminar).
-        if (isFair() && S.reach && S.phase !== 'play' && S.phase !== 'pause') layoutFair();
+        if (isFair() && !['idle', 'settle', 'play', 'pause'].includes(S.phase)) layoutFair();
         if (wasMode !== S.cfg.gameMode && (wasMode === 'fair' || isFair()) && S.phase === 'play') {
           // Cambiar desde o hacia la feria a mitad del juego: se cierra la ronda limpiamente.
           if (fairScene) fairScene.clear();
@@ -1914,7 +1914,8 @@ function fairHost() {
 
 // Arma la feria dentro del alcance cómodo. Devuelve false si con ese alcance no cabe de forma segura.
 function layoutFair() {
-  if (!fairScene || !S.cfg || !S.reach) return false;
+  if (!fairScene || !S.cfg) return false;
+  // Si se omitió la calibración, se usan las distancias configuradas (igual que en el manzano y las luces).
   S.dist = effectiveDistances(S.cfg, S.reach);
   S.fairOk = fairScene.configure(S.cfg, S.dist, S.eyeH || 1.15);
   return S.fairOk;
