@@ -219,6 +219,16 @@ export class Critters {
 
   /* ---------------- Ciclo ---------------- */
 
+  // Si la altura de ojos cambió (por «Recentrar»), se rearma la mesita a la altura nueva, salvo que haya algo en curso.
+  refreshHeight() {
+    if (!this.active || !this.table) return;
+    const eyeH = clamp((this.host.eyeH && this.host.eyeH()) || 1.15, 0.8, 1.9);
+    const h = clamp(eyeH * 0.62, 0.6, 0.95);
+    if (Math.abs(h - this.table.h) < 0.02) return;
+    if (this.items.some((i) => i.state === 'held') || Object.values(this.animals).some((a) => a.feeding)) return;
+    this.buildProps();
+  }
+
   setVisible(v) {
     v = !!v;
     if (v === this.group.visible) return;

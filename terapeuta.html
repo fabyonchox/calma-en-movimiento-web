@@ -433,19 +433,11 @@
         <div style="border-top: 1px solid var(--line); padding-top: 14px;">
           <label style="margin-top:0; color:var(--muted);">Control Clínico Directo de Emergencia</label>
           <p id="sessionNote" style="margin:4px 0 0; font-size:0.9rem; color:var(--muted);"></p>
+          <p style="margin:4px 0 0; font-size:0.8rem; color:var(--muted);">🎯 <b>Recentrar</b>: pide que mire al frente en su postura normal y pulsa una vez. Ajusta posición, dirección y altura de ojos.</p>
           <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:8px;">
             <button id="directPauseBtn" class="action-btn secondary-btn" type="button">⏸ Pausar</button>
-            <button id="directRecenterBtn" class="action-btn secondary-btn" type="button" style="border-color:var(--acc); color:var(--acc); font-weight:700;">🎯 Recentrar</button>
+            <button id="directRecenterBtn" class="action-btn secondary-btn" type="button" title="Centra el juego en la posición, la dirección de la mirada y la altura de ojos actuales del paciente. Pídele que mire al frente en su postura normal." style="border-color:var(--acc); color:var(--acc); font-weight:700;">🎯 Recentrar</button>
             <button id="directFinishBtn" class="action-btn danger-btn" type="button">⏹ Finalizar</button>
-          </div>
-          <label style="margin-top:12px; color:var(--muted); font-size:0.8rem;">Ajuste fino del centro del juego (5 cm / 5° por toque; «Recentrar» lo reinicia)</label>
-          <div style="display:grid; grid-template-columns:repeat(6,1fr); gap:6px; margin-top:6px;">
-            <button type="button" class="action-btn secondary-btn" data-nudge="L" title="Mover el juego a la izquierda" aria-label="Mover el juego a la izquierda">◀</button>
-            <button type="button" class="action-btn secondary-btn" data-nudge="R" title="Mover el juego a la derecha" aria-label="Mover el juego a la derecha">▶</button>
-            <button type="button" class="action-btn secondary-btn" data-nudge="F" title="Alejar el juego" aria-label="Alejar el juego">▲</button>
-            <button type="button" class="action-btn secondary-btn" data-nudge="B" title="Acercar el juego" aria-label="Acercar el juego">▼</button>
-            <button type="button" class="action-btn secondary-btn" data-nudge="RL" title="Girar el juego a la izquierda" aria-label="Girar el juego a la izquierda">⟲</button>
-            <button type="button" class="action-btn secondary-btn" data-nudge="RR" title="Girar el juego a la derecha" aria-label="Girar el juego a la derecha">⟳</button>
           </div>
           <button id="newSessionBtn" class="action-btn secondary-btn" type="button" style="margin-top:10px;">🔄 Nueva sesión (limpiar pantalla)</button>
         </div>
