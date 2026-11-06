@@ -63,10 +63,20 @@ export function fairLayout(cfg, dist, eyeH = 1.15) {
     supports: o.row === 0 ? [] : o.row === 1 ? (o.x < 0 ? [0, 1] : [1, 2]) : [3, 4],
   }));
 
-  const binX = Math.min(0.27, cap * 0.5);
+  // Bandejas: si el alcance lo permite, van a los lados del mostrador y más lejos de la cabeza (hasta 0.46 m),
+  // sin pasar el alcance cómodo. Si no alcanza, van delante del mostrador (más cerca) como antes.
+  const latX = COUNTER.w / 2 + BIN.w / 2 + 0.03;
+  const latZ = Math.min(0.46, dz * 0.72);
+  const sides = side === 'both' ? ['right', 'left'] : [side];
+  const lateralOk = latZ >= 0.3 && sides.every((sd) => hyp(Math.abs(cx + (sd === 'right' ? latX : -latX)), latZ) <= cap);
   const bins = [];
-  if (side === 'right' || side === 'both') bins.push({ side: 'right', x: binX, z: -binZ, top });
-  if (side === 'left' || side === 'both') bins.push({ side: 'left', x: -binX, z: -binZ, top });
+  if (lateralOk) {
+    for (const sd of sides) bins.push({ side: sd, x: cx + (sd === 'right' ? latX : -latX), z: -latZ, top });
+  } else {
+    const binX = Math.min(0.27, cap * 0.5);
+    if (side === 'right' || side === 'both') bins.push({ side: 'right', x: binX, z: -binZ, top });
+    if (side === 'left' || side === 'both') bins.push({ side: 'left', x: -binX, z: -binZ, top });
+  }
 
   // Red de rebote detrás de los tarros: las pelotas que fallan quedan dentro del campo visual (no se pierden en el fondo).
   const net = { backZ: counter.minZ - 0.7, halfW: Math.max(1.0, COUNTER.w / 2 + Math.abs(cx) + 0.45) };
