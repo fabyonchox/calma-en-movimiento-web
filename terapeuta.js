@@ -610,6 +610,7 @@ function startNewSession() {
 // Botones directos de emergencia
 $('directPauseBtn').onclick = () => triggerRemoteButton(currentPhase === 'pause' ? 'resume' : 'pause');
 $('directRecenterBtn').onclick = () => triggerRemoteButton('recenter');
+document.querySelectorAll('[data-nudge]').forEach((b) => { b.onclick = () => triggerRemoteButton('nudge:' + b.dataset.nudge); });
 $('directFinishBtn').onclick = () => {
   if (confirm('¿Confirmas finalizar la sesión del paciente ahora? El paciente seguirá dentro de la realidad virtual.')) {
     triggerRemoteButton('finish');

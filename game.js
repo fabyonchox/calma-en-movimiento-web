@@ -1266,6 +1266,7 @@ async function enterVR() {
     S.cfg = cfg;
     S.runRecords = [];
     S.reach = null;
+    S.centerOff = { x: 0, z: 0, yaw: 0 };
     initThree();
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') await audioCtx.resume();
@@ -1361,6 +1362,38 @@ function onSessionEnd() {
   broadcastState();
 }
 
+// Ajuste fino del centro (lo maneja el terapeuta): desplazamiento a la derecha (x) y hacia adelante (z) en metros,
+// y giro (yaw) en radianes, respecto de donde "Recentrar" puso el juego. No vuelve a leer la cabeza del paciente.
+function applyCenterOffset() {
+  const b = S.centerBase;
+  if (!b || !anchor) return;
+  const o = S.centerOff || (S.centerOff = { x: 0, z: 0, yaw: 0 });
+  const c = Math.cos(b.yaw); const s = Math.sin(b.yaw);
+  anchor.position.x = b.x + o.x * c - o.z * s;
+  anchor.position.z = b.z - o.x * s - o.z * c;
+  anchor.rotation.y = b.yaw + o.yaw;
+  anchor.updateMatrixWorld(true);
+}
+
+function nudgeCenter(dir) {
+  if (!['calib', 'painBefore', 'ready', 'pause', 'play'].includes(S.phase)) return;
+  if (S.heldApple || S.droppingApple || (fairScene && fairScene.holding())) return;
+  const o = S.centerOff || (S.centerOff = { x: 0, z: 0, yaw: 0 });
+  const STEP = 0.05; const ROT = (5 * Math.PI) / 180;
+  if (dir === 'L') o.x -= STEP;
+  else if (dir === 'R') o.x += STEP;
+  else if (dir === 'F') o.z += STEP; // alejar el juego
+  else if (dir === 'B') o.z -= STEP; // acercar el juego
+  else if (dir === 'RL') o.yaw += ROT; // girar a la izquierda
+  else if (dir === 'RR') o.yaw -= ROT;
+  else return;
+  o.x = Math.max(-0.6, Math.min(0.6, o.x));
+  o.z = Math.max(-0.5, Math.min(0.5, o.z));
+  o.yaw = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, o.yaw));
+  applyCenterOffset();
+  triggerHaptic(15, 0.15);
+}
+
 function placeAnchor() {
   camera.updateMatrixWorld(true);
   camera.getWorldPosition(tmpA);
@@ -1368,6 +1401,8 @@ function placeAnchor() {
   const fallback = S.cfg.position === 'standing' ? 1.6 : 1.15;
   anchor.position.set(tmpA.x, S.hasFloor ? 0 : tmpA.y - fallback, tmpA.z);
   anchor.rotation.set(0, Math.atan2(-d.x, -d.z), 0);
+  S.centerBase = { x: anchor.position.x, z: anchor.position.z, yaw: anchor.rotation.y };
+  applyCenterOffset();
   anchor.updateMatrixWorld(true);
   S.eyeH = tmpA.y - anchor.position.y;
   S.cfg.eyeH = S.eyeH; // Pasar altura real del paciente a la cinemática de spawn
@@ -1877,8 +1912,10 @@ function onButton(id, c, isRemote = false) {
       break;
     case 'recenter':
       // Recentrar el jardín según la posición actual de la cabeza (no mientras hay una manzana en la mano).
-      if (['calib', 'painBefore', 'ready', 'pause', 'play'].includes(S.phase) && !S.heldApple && !S.droppingApple) placeAnchor();
+      // También borra el ajuste fino de centro que hizo el terapeuta.
+      if (['calib', 'painBefore', 'ready', 'pause', 'play'].includes(S.phase) && !S.heldApple && !S.droppingApple) { S.centerOff = { x: 0, z: 0, yaw: 0 }; placeAnchor(); }
       break;
+    case 'nudge': nudgeCenter(v); break;
     case 'done': commitRecord(); S.phase = 'rest'; break;
     case 'leave':
       // Salir de realidad virtual: solo desde el resumen o la sala de descanso.
