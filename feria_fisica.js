@@ -43,8 +43,8 @@ export function fairLayout(cfg, dist, eyeH = 1.15) {
   let dz = cap;
   while (dz > 0.05 && farthest(dz) > cap) dz -= 0.005;
   // Hay que dejar espacio delante del mostrador para las bandejas.
-  // Las bandejas van lo más lejos posible de la cabeza (hasta 0.30 m) sin chocar con el mostrador; mínimo 0.12 m.
-  const binZ = Math.min(0.30, dz - COUNTER.d / 2 - BIN.d / 2 - 0.005); // distancia al centro de la bandeja
+  // Las bandejas van lo más lejos posible de la cabeza (hasta 0.42 m) sin chocar con el mostrador; mínimo 0.12 m.
+  const binZ = Math.min(0.42, dz - COUNTER.d / 2 - BIN.d / 2 - 0.005); // distancia al centro de la bandeja
   const ok = binZ >= 0.12;
 
   const counter = {
@@ -64,7 +64,10 @@ export function fairLayout(cfg, dist, eyeH = 1.15) {
   if (side === 'right' || side === 'both') bins.push({ side: 'right', x: binX, z: -binZ, top });
   if (side === 'left' || side === 'both') bins.push({ side: 'left', x: -binX, z: -binZ, top });
 
-  return { ok, cap, side, top, counter, cans, bins, dz };
+  // Red de rebote detrás de los tarros: las pelotas que fallan quedan dentro del campo visual (no se pierden en el fondo).
+  const net = { backZ: counter.minZ - 0.7, halfW: Math.max(1.0, COUNTER.w / 2 + Math.abs(cx) + 0.45) };
+
+  return { ok, cap, side, top, counter, cans, bins, dz, net };
 }
 
 /* ---------- Velocidad de lanzamiento a partir del recorrido de la mano ---------- */
@@ -240,6 +243,7 @@ export class FairWorld {
       this.ballVsBins(b);
       if (b.state !== 'flying') { b.onCounter = false; continue; } // ya volvió a la bandeja
       this.ballVsCans(b);
+      this.ballVsNet(b);
       if (b.p.y < b.r) { // suelo
         b.p.y = b.r;
         if (b.v.y < 0) { b.v.y = -b.v.y * 0.45; b.bounces++; }
@@ -309,6 +313,16 @@ export class FairWorld {
     while (idx < slots.length && used.has(idx)) idx++;
     if (idx >= slots.length) return; // bandeja llena: queda en reposo donde cayó
     b.state = 'bin'; b.bin = bin.side; b.slot = idx; b.p = { ...slots[idx] }; b.v = { x: 0, y: 0, z: 0 };
+  }
+
+  // Red de fondo y laterales: la pelota rebota suave y cae, sin salir del campo visual.
+  ballVsNet(b) {
+    const n = this.layout.net;
+    if (!n) return;
+    if (b.p.z < n.backZ + b.r) { b.p.z = n.backZ + b.r; if (b.v.z < 0) b.v.z = -b.v.z * 0.25; b.v.x *= 0.8; }
+    if (b.p.x > n.halfW - b.r) { b.p.x = n.halfW - b.r; if (b.v.x > 0) b.v.x = -b.v.x * 0.25; }
+    if (b.p.x < -n.halfW + b.r) { b.p.x = -n.halfW + b.r; if (b.v.x < 0) b.v.x = -b.v.x * 0.25; }
+    if (b.p.y > 3) { b.p.y = 3; if (b.v.y > 0) b.v.y = 0; }
   }
 
   ballVsCans(b) {

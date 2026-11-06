@@ -1555,8 +1555,8 @@ function phaseModel() {
             lines: [
               'Mira al frente y mantén una postura relajada.',
               usingHands()
-                ? 'Extiende tu brazo hasta donde sea agradable y sin dolor, y pulsa "Registrar alcance" tocando el botón o con pellizco.'
-                : 'Extiende tu brazo hasta donde sea agradable y sin dolor, y pulsa "Registrar alcance" con el gatillo.',
+                ? 'Extiende el brazo hasta donde sea cómodo y sin dolor, y pulsa «Registrar alcance» (toque o pellizco).'
+                : 'Extiende el brazo hasta donde sea cómodo y sin dolor, y pulsa «Registrar alcance» con el gatillo.',
               eyeLine(),
               S.calibHint,
             ].filter(Boolean),
