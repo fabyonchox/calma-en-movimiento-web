@@ -5,6 +5,7 @@ import {
   horizontalDistance, distance, formatTime, newRecord, buildCSV, buildSummary,
 } from './logic.js';
 import { VRPanel } from './vrui.js';
+import { Critters } from './critters.js';
 import { HeadsetSyncClient } from './sync-client.js';
 
 const $ = (id) => document.getElementById(id);
@@ -16,6 +17,7 @@ const f2 = (n) => n.toFixed(2);
 const ORB_COLORS = [0xfff3a0, 0xa0e3ff, 0xa8f0cf]; // amarillo claro, celeste, verde menta
 
 let renderer, scene, camera, anchor, menuPanel, hudPanel, orb, popRing, session, audioCtx, ambient;
+let critters = null; // animalitos de la pantalla de espera
 let fairScene = null; // escenario Feria de juegos
 let treeGroup, basketGroup, targetAppleGroup, harvestedApplesGroup, basketRimGlow;
 const baskets = []; // canasto izquierdo y derecho
@@ -864,6 +866,7 @@ function initThree() {
   buildBasket();
   buildTargetApple();
   fairScene = new FairScene(THREE, anchor, fairHost());
+  critters = new Critters(THREE, anchor);
   for (let i = 0; i < 2; i++) {
     const h = new THREE.Group();
     h.add(
@@ -2175,12 +2178,22 @@ function update(dt, now) {
   hands.forEach((h) => { h.visible = false; });
 
   const pm = phaseModel();
-  menuPanel.mesh.visible = pm.panel === 'menu';
+  // Con el terapeuta conectado, las preguntas y menús (dolor, calibración, inicio, satisfacción, resumen) se ven y se
+  // responden SOLO en su pantalla. Dentro del visor queda el jardín con animalitos. Sin terapeuta, el menú sale
+  // en el visor como respaldo para que el paciente no quede bloqueado.
+  const therapistOnly = !!(syncClient && syncClient.isConnected && syncClient.peerConnected);
+  menuPanel.mesh.visible = pm.panel === 'menu' && !therapistOnly;
   // Panel de juego: solo el botón de Pausa, sin progreso ni tiempo (eso se ve en la tablet del evaluador).
   hudPanel.mesh.visible = pm.panel === 'hud';
-  if (pm.panel === 'menu') menuPanel.set(pm.model);
+  if (pm.panel === 'menu' && !therapistOnly) menuPanel.set(pm.model);
   if (pm.panel === 'hud') hudPanel.set(pm.model);
   updatePointers();
+
+  // Pantalla de espera: animalitos mientras el paciente espera y el terapeuta maneja los menús.
+  if (critters) {
+    critters.setVisible(therapistOnly && pm.panel === 'menu' && !['pause'].includes(S.phase));
+    critters.update(dt);
+  }
 
   const isApplesMode = !!(S.cfg && S.cfg.gameMode === 'apples');
   const isFairMode = isFair();

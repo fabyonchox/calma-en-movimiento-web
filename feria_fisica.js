@@ -11,7 +11,7 @@ export const RETURN_SPEED = 0.6;
 export const KNOCK_SPEED = 0.3;
 
 export const CAN = { r: 0.05, h: 0.12 };
-export const COUNTER = { w: 0.6, d: 0.24 };
+export const COUNTER = { w: 0.6, d: 0.2 };
 export const BIN = { w: 0.32, d: 0.32, wall: 0.02, wallH: 0.05 };
 // Pelotas por bandeja: pila de 3x3 + 2x2 + 1.
 export const BIN_BALLS = 14;
@@ -40,11 +40,15 @@ export function fairLayout(cfg, dist, eyeH = 1.15) {
   const farthest = (dz) => Math.max(...offsets.map((o) => hyp(cx + o.x, dz)));
 
   // Profundidad del mostrador: lo más lejos posible sin pasar el alcance cómodo.
-  let dz = cap;
-  while (dz > 0.05 && farthest(dz) > cap) dz -= 0.005;
+  // Los tarros van al 85 % del alcance cómodo (no al límite), para no tener que estirarse al máximo.
+  // Si con alcance muy corto no cabe así, se usa hasta el 100 % (el mínimo para que quepan las bandejas).
+  const fitDz = (start) => { let d = start; while (d > 0.05 && farthest(d) > cap) d -= 0.005; return d; };
+  let dz = fitDz(Math.min(cap * 0.85, 0.7));
   // Hay que dejar espacio delante del mostrador para las bandejas.
-  // Las bandejas van lo más lejos posible de la cabeza (hasta 0.42 m) sin chocar con el mostrador; mínimo 0.12 m.
-  const binZ = Math.min(0.42, dz - COUNTER.d / 2 - BIN.d / 2 - 0.005); // distancia al centro de la bandeja
+  // Las bandejas van lo más lejos posible de la cabeza (hasta 0.36 m) sin chocar con el mostrador; mínimo 0.12 m.
+  const binZFor = (d) => Math.min(0.36, d - COUNTER.d / 2 - BIN.d / 2 - 0.005); // distancia al centro de la bandeja
+  if (binZFor(dz) < 0.12) dz = fitDz(cap);
+  const binZ = binZFor(dz);
   const ok = binZ >= 0.12;
 
   const counter = {
