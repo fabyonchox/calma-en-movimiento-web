@@ -1558,9 +1558,10 @@ function phaseModel() {
             lines: [
               'Mira al frente y mantén una postura relajada.',
               usingHands()
-                ? 'Extiende el brazo hasta donde sea cómodo y sin dolor, y pulsa «Registrar alcance» (toque o pellizco).'
-                : 'Extiende el brazo hasta donde sea cómodo y sin dolor, y pulsa «Registrar alcance» con el gatillo.',
+                ? 'Pide que extienda el brazo hasta donde sea cómodo y sin dolor y lo mantenga; luego pulsa «Registrar alcance» (se toma el máximo de los últimos 4 s).'
+                : 'Pide que extienda el brazo hasta donde sea cómodo y sin dolor y lo mantenga; luego pulsa «Registrar alcance» (se toma el máximo de los últimos 4 s).',
               eyeLine(),
+              reachLine(),
               S.calibHint,
             ].filter(Boolean),
             lineSize: 30,
@@ -1926,24 +1927,64 @@ function layoutFair() {
   return S.fairOk;
 }
 
+// Alcance horizontal de las manos de trabajo en este instante (null si no se detecta ninguna).
+function currentReach() {
+  const head = headLocal();
+  let r = null;
+  for (const ctrl of handCtrls().filter(ctrlActive)) {
+    const d = horizontalDistance(handLocal(ctrl), head);
+    r = r === null ? d : Math.max(r, d);
+  }
+  return r;
+}
+
+// Durante la calibración se recuerda el alcance de los últimos segundos. Así, aunque el terapeuta pulse
+// «Registrar alcance» desde su pantalla un momento después de que el paciente estire el brazo, se toma el máximo real.
+const REACH_WINDOW_MS = 4000;
+const MIN_VALID_REACH = 0.35; // por debajo, la mano está en reposo (los objetivos quedarían en la cara)
+let reachSamples = [];
+let lastCalibBroadcast = 0;
+function sampleReach(now) {
+  const r = currentReach();
+  if (r !== null) reachSamples.push({ t: now, r });
+  while (reachSamples.length && now - reachSamples[0].t > REACH_WINDOW_MS) reachSamples.shift();
+  return r;
+}
+function recentMaxReach() {
+  return reachSamples.reduce((m, s) => Math.max(m, s.r), 0);
+}
+let reachLineCache = ''; let reachLineAt = 0;
+function reachLine() {
+  const t = performance.now();
+  if (reachLineCache && t - reachLineAt < 400) return reachLineCache; // evita redibujar el panel en cada cuadro
+  reachLineAt = t;
+  reachLineCache = reachLineRaw();
+  return reachLineCache;
+}
+function reachLineRaw() {
+  const cur = currentReach();
+  if (cur === null && !reachSamples.length) return 'No se detectan las manos del paciente.';
+  const f = (v) => v.toFixed(2).replace('.', ',') + ' m';
+  return 'Alcance ahora: ' + (cur === null ? '—' : f(cur)) + ' · máximo últimos 4 s: ' + f(recentMaxReach()) + ' (mínimo ' + f(MIN_VALID_REACH) + ')';
+}
+
 function measureReach(c) {
   // Se mide la mano del lado de trabajo (con "Bilateral", la que llegue más lejos), no la que pulsó el botón:
   // así también funciona cuando el evaluador pulsa "Registrar alcance" desde la tablet.
-  const head = headLocal();
-  let r = 0;
-  const working = handCtrls().filter(ctrlActive);
-  for (const ctrl of working) r = Math.max(r, horizontalDistance(handLocal(ctrl), head));
-  if (!working.length) {
+  let r = Math.max(recentMaxReach(), currentReach() || 0);
+  if (r === 0) {
     const ctrl = c && controllers.find((x) => x.obj === c);
     if (ctrl && ctrlActive(ctrl)) {
-      r = horizontalDistance(handLocal(ctrl), head);
+      r = horizontalDistance(handLocal(ctrl), headLocal());
     } else {
       S.calibHint = 'No se detecta la mano de trabajo. Acércala para que el visor la vea e inténtalo de nuevo.';
+      broadcastState();
       return;
     }
   }
-  if (r < 0.25) {
-    S.calibHint = 'Extiende un poco más, solo si es cómodo.';
+  if (r < MIN_VALID_REACH) {
+    S.calibHint = 'Alcance muy corto (' + r.toFixed(2).replace('.', ',') + ' m): pide que extienda el brazo un poco más, solo si es cómodo, y vuelve a registrar.';
+    broadcastState();
     return;
   }
   S.reach = Math.min(1.3, r);
@@ -2176,6 +2217,14 @@ function update(dt, now) {
 
   // Ocultar esferas de respaldo cuando los modelos 3D detallados están activos
   hands.forEach((h) => { h.visible = false; });
+
+  if (S.phase === 'calib') {
+    sampleReach(now);
+    // El terapeuta ve el alcance en vivo: se reenvía la tarjeta unas 2 veces por segundo mientras se calibra.
+    if (now - lastCalibBroadcast > 500) { lastCalibBroadcast = now; broadcastState(); }
+  } else if (reachSamples.length) {
+    reachSamples = [];
+  }
 
   const pm = phaseModel();
   // Con el terapeuta conectado, las preguntas y menús (dolor, calibración, inicio, satisfacción, resumen) se ven y se
