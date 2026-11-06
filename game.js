@@ -866,7 +866,16 @@ function initThree() {
   buildBasket();
   buildTargetApple();
   fairScene = new FairScene(THREE, anchor, fairHost());
-  critters = new Critters(THREE, anchor);
+  critters = new Critters(THREE, anchor, {
+    // Manos activas del paciente (punta del índice o mando) y si están pellizcando/agarrando
+    hands: () => controllers.filter(ctrlActive).map((c, i) => {
+      const p = handLocal(c);
+      return { id: ctrlSide(c) || ('h' + i), p: { x: p.x, y: p.y, z: p.z }, grasp: isControllerGrasping(c) };
+    }),
+    eyeH: () => S.eyeH || 1.15,
+    side: () => (S.cfg && S.cfg.side) || 'right',
+    haptic: (ms, k) => triggerHaptic(ms, k),
+  });
   for (let i = 0; i < 2; i++) {
     const h = new THREE.Group();
     h.add(
@@ -2246,8 +2255,9 @@ function update(dt, now) {
 
   const isApplesMode = !!(S.cfg && S.cfg.gameMode === 'apples');
   const isFairMode = isFair();
-  if (treeGroup) treeGroup.visible = isApplesMode;
-  if (basketGroup) basketGroup.visible = isApplesMode;
+  const waitingScene = !!(critters && critters.group.visible);
+  if (treeGroup) treeGroup.visible = isApplesMode && !waitingScene;
+  if (basketGroup) basketGroup.visible = isApplesMode && !waitingScene;
   // La feria solo se ve mientras se juega (o en pausa). En escalas, resumen y descanso se oculta para que no se mezcle con los diálogos.
   if (fairScene) fairScene.setVisible(isFairMode && fairScene.ready() && ['play', 'pause'].includes(S.phase));
 
