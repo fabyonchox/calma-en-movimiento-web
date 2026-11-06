@@ -1361,9 +1361,11 @@ function placeAnchor() {
   S.cfg.eyeH = S.eyeH; // Pasar altura real del paciente a la cinemática de spawn
 
   menuPanel.mesh.position.set(0, S.eyeH - 0.05, -1.0);
-  // HUD elevado al ángulo superior: visible levantando la mirada, pero fuera de la zona de alcance de los brazos
-  hudPanel.mesh.position.set(0, S.eyeH + 0.44, -1.25);
-  hudPanel.mesh.rotation.x = 0.28;
+  // Botón de Pausa arriba a la derecha y bien lateral: fuera del área de juego y del recorrido de los brazos,
+  // para que no se pulse por accidente (la pausa ofrece "Finalizar sesión"). Se orienta hacia la cabeza.
+  hudPanel.mesh.position.set(0.8, S.eyeH + 0.3, -0.95);
+  hudPanel.mesh.rotation.order = 'YXZ';
+  hudPanel.mesh.rotation.set(0.2, -Math.atan2(0.8, 0.95), 0);
 
   // Canastos a izquierda y derecha del paciente
   for (const b of baskets) {
@@ -2184,7 +2186,8 @@ function update(dt, now) {
   const isFairMode = isFair();
   if (treeGroup) treeGroup.visible = isApplesMode;
   if (basketGroup) basketGroup.visible = isApplesMode;
-  if (fairScene) fairScene.setVisible(isFairMode && fairScene.ready() && !['settle', 'calib', 'bye'].includes(S.phase));
+  // La feria solo se ve mientras se juega (o en pausa). En escalas, resumen y descanso se oculta para que no se mezcle con los diálogos.
+  if (fairScene) fairScene.setVisible(isFairMode && fairScene.ready() && ['play', 'pause'].includes(S.phase));
 
   if (S.phase !== 'play') return;
 

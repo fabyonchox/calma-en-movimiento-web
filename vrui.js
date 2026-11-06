@@ -13,8 +13,10 @@ export class VRPanel {
     this.texture.colorSpace = THREE.SRGBColorSpace;
     this.mesh = new THREE.Mesh(
       new THREE.PlaneGeometry(width, height),
-      new THREE.MeshBasicMaterial({ map: this.texture, transparent: true })
+      // Los diálogos se dibujan siempre por encima de la escena (tarros, pelotas, árbol): nada los tapa.
+      new THREE.MeshBasicMaterial({ map: this.texture, transparent: true, depthTest: false, depthWrite: false })
     );
+    this.mesh.renderOrder = 100;
     this.rects = [];
     this.hover = null;
     this.model = null;

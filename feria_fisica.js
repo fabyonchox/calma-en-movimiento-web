@@ -43,8 +43,9 @@ export function fairLayout(cfg, dist, eyeH = 1.15) {
   let dz = cap;
   while (dz > 0.05 && farthest(dz) > cap) dz -= 0.005;
   // Hay que dejar espacio delante del mostrador para las bandejas.
-  const binFrontZ = 0.12 + BIN.d / 2; // borde trasero de la bandeja (distancia desde el paciente)
-  const ok = dz - COUNTER.d / 2 >= binFrontZ + 0.005;
+  // Las bandejas van lo más lejos posible de la cabeza (hasta 0.30 m) sin chocar con el mostrador; mínimo 0.12 m.
+  const binZ = Math.min(0.30, dz - COUNTER.d / 2 - BIN.d / 2 - 0.005); // distancia al centro de la bandeja
+  const ok = binZ >= 0.12;
 
   const counter = {
     cx, cz: -dz, w: COUNTER.w, d: COUNTER.d, top,
@@ -60,8 +61,8 @@ export function fairLayout(cfg, dist, eyeH = 1.15) {
 
   const binX = Math.min(0.27, cap * 0.5);
   const bins = [];
-  if (side === 'right' || side === 'both') bins.push({ side: 'right', x: binX, z: -0.12, top });
-  if (side === 'left' || side === 'both') bins.push({ side: 'left', x: -binX, z: -0.12, top });
+  if (side === 'right' || side === 'both') bins.push({ side: 'right', x: binX, z: -binZ, top });
+  if (side === 'left' || side === 'both') bins.push({ side: 'left', x: -binX, z: -binZ, top });
 
   return { ok, cap, side, top, counter, cans, bins, dz };
 }
