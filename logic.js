@@ -110,6 +110,25 @@ export function horizontalDistance(a, b) {
 
 // Si el kinesiólogo activó "limitar al alcance cómodo", ningún objetivo queda más lejos
 // de lo que el usuario marcó como cómodo al calibrar.
+// Alcance SOSTENIDO: el mayor valor que la mano mantuvo al menos `holdMs` seguidos (mínimo de cada tramo).
+// Así un salto momentáneo del seguimiento de manos, o un estirón de un instante, no queda como "alcance cómodo".
+// samples: [{t (ms), r (m)}] en orden de tiempo. Devuelve 0 si ningún tramo dura lo suficiente.
+export function sustainedReach(samples, holdMs = 500, toleranceMs = 60) {
+  let best = 0;
+  let j = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const tEnd = samples[i].t;
+    while (j < i && samples[j].t < tEnd - holdMs) j++;
+    // El tramo debe cubrir de verdad `holdMs` (hay una muestra justo antes de su inicio o en él)
+    const startIdx = j > 0 ? j - 1 : j;
+    if (tEnd - samples[startIdx].t < holdMs - toleranceMs) continue;
+    let m = Infinity;
+    for (let k = startIdx; k <= i; k++) m = Math.min(m, samples[k].r);
+    if (m > best) best = m;
+  }
+  return best;
+}
+
 export function effectiveDistances(cfg, reach) {
   let maxD = cfg.maxD;
   let minD = cfg.minD;

@@ -2,7 +2,7 @@ import * as THREE from './libs/three.module.min.js';
 import { FairScene } from './feria_escena.js';
 import {
   DEFAULTS, ZONES, SIZES, MESSAGES, normalizeConfig, mergeConfig, REMOTE_KEYS, effectiveDistances, pickTarget,
-  horizontalDistance, distance, formatTime, newRecord, buildCSV, buildSummary,
+  horizontalDistance, distance, formatTime, newRecord, buildCSV, buildSummary, sustainedReach,
 } from './logic.js';
 import { VRPanel } from './vrui.js';
 import { Critters } from './critters.js';
@@ -874,6 +874,7 @@ function initThree() {
     }),
     eyeH: () => S.eyeH || 1.15,
     side: () => (S.cfg && S.cfg.side) || 'right',
+    reach: () => S.reach || null, // la mesita queda dentro del alcance cómodo calibrado
     haptic: (ms, k) => triggerHaptic(ms, k),
   });
   for (let i = 0; i < 2; i++) {
@@ -1962,12 +1963,16 @@ let reachSamples = [];
 let lastCalibBroadcast = 0;
 function sampleReach(now) {
   const r = currentReach();
-  if (r !== null) reachSamples.push({ t: now, r });
+  // Lecturas imposibles para un brazo (más de 1,30 m desde la cabeza) son errores del seguimiento: se descartan.
+  if (r !== null && r <= 1.3) reachSamples.push({ t: now, r });
   while (reachSamples.length && now - reachSamples[0].t > REACH_WINDOW_MS) reachSamples.shift();
   return r;
 }
+// Alcance que el paciente MANTUVO (al menos medio segundo) en los últimos 4 s. No se usa el pico de un instante:
+// un salto del seguimiento de manos podía registrar un alcance falso (por ejemplo 1,30 m) y dejar objetivos lejos.
+const REACH_HOLD_MS = 500;
 function recentMaxReach() {
-  return reachSamples.reduce((m, s) => Math.max(m, s.r), 0);
+  return sustainedReach(reachSamples, REACH_HOLD_MS);
 }
 let reachLineCache = ''; let reachLineAt = 0;
 function reachLine() {
@@ -1981,13 +1986,14 @@ function reachLineRaw() {
   const cur = currentReach();
   if (cur === null && !reachSamples.length) return 'No se detectan las manos del paciente.';
   const f = (v) => v.toFixed(2).replace('.', ',') + ' m';
-  return 'Alcance ahora: ' + (cur === null ? '—' : f(cur)) + ' · máximo últimos 4 s: ' + f(recentMaxReach()) + ' (mínimo ' + f(MIN_VALID_REACH) + ')';
+  return 'Alcance ahora: ' + (cur === null ? '—' : f(cur)) + ' · mantenido (½ s) en los últimos 4 s: ' + f(recentMaxReach()) + ' (mínimo ' + f(MIN_VALID_REACH) + ')';
 }
 
 function measureReach(c) {
   // Se mide la mano del lado de trabajo (con "Bilateral", la que llegue más lejos), no la que pulsó el botón:
   // así también funciona cuando el evaluador pulsa "Registrar alcance" desde la tablet.
-  let r = Math.max(recentMaxReach(), currentReach() || 0);
+  // Alcance mantenido; si aún no hay medio segundo de datos (recién empieza la calibración), la lectura actual.
+  let r = recentMaxReach() || currentReach() || 0;
   if (r === 0) {
     const ctrl = c && controllers.find((x) => x.obj === c);
     if (ctrl && ctrlActive(ctrl)) {
@@ -2004,6 +2010,7 @@ function measureReach(c) {
     return;
   }
   S.reach = Math.min(1.3, r);
+  if (critters) critters.refreshHeight(); // la mesita se acomoda al alcance recién medido
   S.calibHint = '';
   if (isFair()) layoutFair();
   S.phase = 'painBefore';
@@ -2246,7 +2253,10 @@ function update(dt, now) {
   // Con el terapeuta conectado, las preguntas y menús (dolor, calibración, inicio, satisfacción, resumen) se ven y se
   // responden SOLO en su pantalla. Dentro del visor queda el jardín con animalitos. Sin terapeuta, el menú sale
   // en el visor como respaldo para que el paciente no quede bloqueado.
-  const therapistOnly = !!(syncClient && syncClient.isConnected && syncClient.peerConnected);
+  // Excepción: PAUSA y DESCANSO siempre se ven en el visor, para que el paciente tenga su propia salida
+  // ("Continuar", "Finalizar", "Salir de realidad virtual") aunque la tablet esté conectada.
+  const patientPanel = ['pause', 'rest'].includes(S.phase);
+  const therapistOnly = !!(syncClient && syncClient.isConnected && syncClient.peerConnected) && !patientPanel;
   menuPanel.mesh.visible = pm.panel === 'menu' && !therapistOnly;
   // Panel de juego: solo el botón de Pausa, sin progreso ni tiempo (eso se ve en la tablet del evaluador).
   hudPanel.mesh.visible = pm.panel === 'hud';
@@ -2534,4 +2544,4 @@ function loop() {
 
 initForm();
 
-export const __test = { S, update, onButton, phaseModel, enterVR, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get anchor() { return anchor; } };
+export const __test = { S, update, onButton, phaseModel, enterVR, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get anchor() { return anchor; } };
