@@ -11,7 +11,7 @@ export const RETURN_SPEED = 0.6;
 export const KNOCK_SPEED = 0.3;
 
 export const CAN = { r: 0.05, h: 0.12 };
-export const COUNTER = { w: 0.6, d: 0.24 };
+export const COUNTER = { w: 0.6, d: 0.2 };
 export const BIN = { w: 0.32, d: 0.32, wall: 0.02, wallH: 0.05 };
 // Pelotas por bandeja: pila de 3x3 + 2x2 + 1.
 export const BIN_BALLS = 14;
@@ -40,11 +40,16 @@ export function fairLayout(cfg, dist, eyeH = 1.15) {
   const farthest = (dz) => Math.max(...offsets.map((o) => hyp(cx + o.x, dz)));
 
   // Profundidad del mostrador: lo más lejos posible sin pasar el alcance cómodo.
-  let dz = cap;
-  while (dz > 0.05 && farthest(dz) > cap) dz -= 0.005;
+  // Los tarros van al 92 % del alcance cómodo (no al límite), para no tener que estirarse al máximo.
+  // Si con alcance muy corto no cabe así, se usa hasta el 100 % (el mínimo para que quepan las bandejas).
+  const fitDz = (start) => { let d = start; while (d > 0.05 && farthest(d) > cap) d -= 0.005; return d; };
+  let dz = fitDz(Math.min(cap * 0.92, 0.78));
   // Hay que dejar espacio delante del mostrador para las bandejas.
-  const binFrontZ = 0.12 + BIN.d / 2; // borde trasero de la bandeja (distancia desde el paciente)
-  const ok = dz - COUNTER.d / 2 >= binFrontZ + 0.005;
+  // Las bandejas van lo más lejos posible de la cabeza (hasta 0.36 m) sin chocar con el mostrador; mínimo 0.12 m.
+  const binZFor = (d) => Math.min(0.36, d - COUNTER.d / 2 - BIN.d / 2 - 0.005); // distancia al centro de la bandeja
+  if (binZFor(dz) < 0.12) dz = fitDz(cap);
+  const binZ = binZFor(dz);
+  const ok = binZ >= 0.12;
 
   const counter = {
     cx, cz: -dz, w: COUNTER.w, d: COUNTER.d, top,
@@ -58,12 +63,25 @@ export function fairLayout(cfg, dist, eyeH = 1.15) {
     supports: o.row === 0 ? [] : o.row === 1 ? (o.x < 0 ? [0, 1] : [1, 2]) : [3, 4],
   }));
 
-  const binX = Math.min(0.27, cap * 0.5);
+  // Bandejas: si el alcance lo permite, van a los lados del mostrador y más lejos de la cabeza (hasta 0.46 m),
+  // sin pasar el alcance cómodo. Si no alcanza, van delante del mostrador (más cerca) como antes.
+  const latX = COUNTER.w / 2 + BIN.w / 2 + 0.03;
+  const latZ = Math.min(0.46, dz * 0.72);
+  const sides = side === 'both' ? ['right', 'left'] : [side];
+  const lateralOk = latZ >= 0.3 && sides.every((sd) => hyp(Math.abs(cx + (sd === 'right' ? latX : -latX)), latZ) <= cap);
   const bins = [];
-  if (side === 'right' || side === 'both') bins.push({ side: 'right', x: binX, z: -0.12, top });
-  if (side === 'left' || side === 'both') bins.push({ side: 'left', x: -binX, z: -0.12, top });
+  if (lateralOk) {
+    for (const sd of sides) bins.push({ side: sd, x: cx + (sd === 'right' ? latX : -latX), z: -latZ, top });
+  } else {
+    const binX = Math.min(0.27, cap * 0.5);
+    if (side === 'right' || side === 'both') bins.push({ side: 'right', x: binX, z: -binZ, top });
+    if (side === 'left' || side === 'both') bins.push({ side: 'left', x: -binX, z: -binZ, top });
+  }
 
-  return { ok, cap, side, top, counter, cans, bins, dz };
+  // Red de rebote detrás de los tarros: las pelotas que fallan quedan dentro del campo visual (no se pierden en el fondo).
+  const net = { backZ: counter.minZ - 0.7, halfW: Math.max(1.0, COUNTER.w / 2 + Math.abs(cx) + 0.45) };
+
+  return { ok, cap, side, top, counter, cans, bins, dz, net };
 }
 
 /* ---------- Velocidad de lanzamiento a partir del recorrido de la mano ---------- */
@@ -239,6 +257,7 @@ export class FairWorld {
       this.ballVsBins(b);
       if (b.state !== 'flying') { b.onCounter = false; continue; } // ya volvió a la bandeja
       this.ballVsCans(b);
+      this.ballVsNet(b);
       if (b.p.y < b.r) { // suelo
         b.p.y = b.r;
         if (b.v.y < 0) { b.v.y = -b.v.y * 0.45; b.bounces++; }
@@ -308,6 +327,16 @@ export class FairWorld {
     while (idx < slots.length && used.has(idx)) idx++;
     if (idx >= slots.length) return; // bandeja llena: queda en reposo donde cayó
     b.state = 'bin'; b.bin = bin.side; b.slot = idx; b.p = { ...slots[idx] }; b.v = { x: 0, y: 0, z: 0 };
+  }
+
+  // Red de fondo y laterales: la pelota rebota suave y cae, sin salir del campo visual.
+  ballVsNet(b) {
+    const n = this.layout.net;
+    if (!n) return;
+    if (b.p.z < n.backZ + b.r) { b.p.z = n.backZ + b.r; if (b.v.z < 0) b.v.z = -b.v.z * 0.25; b.v.x *= 0.8; }
+    if (b.p.x > n.halfW - b.r) { b.p.x = n.halfW - b.r; if (b.v.x > 0) b.v.x = -b.v.x * 0.25; }
+    if (b.p.x < -n.halfW + b.r) { b.p.x = -n.halfW + b.r; if (b.v.x < 0) b.v.x = -b.v.x * 0.25; }
+    if (b.p.y > 3) { b.p.y = 3; if (b.v.y > 0) b.v.y = 0; }
   }
 
   ballVsCans(b) {

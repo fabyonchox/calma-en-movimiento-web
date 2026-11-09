@@ -27,7 +27,7 @@ const FOOD_FOR = { carrot: 'rabbit', acorn: 'squirrel', seed: 'bird' };
 const MAX_VISIBLE = 3;
 
 export class Critters {
-  // host: { hands() -> [{id, p:{x,y,z}, grasp}], eyeH() -> m, side() -> 'left'|'right'|'both', reach() -> m o null, haptic?(ms,k) }
+  // host: { hands() -> [{id, p:{x,y,z}, grasp}], eyeH() -> m, side() -> 'left'|'right'|'both', haptic?(ms,k) }
   constructor(THREE, parent, host = {}) {
     this.T = THREE;
     this.host = host;
@@ -149,61 +149,43 @@ export class Critters {
 
     const eyeH = clamp((this.host.eyeH && this.host.eyeH()) || 1.15, 0.8, 1.9);
     const h = clamp(eyeH * 0.62, 0.6, 0.95); // altura de las mesitas
-    // Regla de seguridad del proyecto: plato y provisiones dentro del ALCANCE CÓMODO calibrado.
-    // El diseño original (plato a 0,65 m) cabe con un alcance de 0,70 m; con menos alcance todo se acerca a escala.
-    // Antes de calibrar se usa el alcance mínimo aceptado (0,35 m), lo más cerca posible.
-    const k = this.layoutScale();
-    this.layoutK = k;
-    const side = (this.host.side && this.host.side()) || 'right';
-    const sides = side === 'both' ? ['right', 'left'] : [side === 'left' ? 'left' : 'right'];
+    const sideSign = this.host.side && this.host.side() === 'left' ? -1 : 1;
 
     // Mesa de comer (centro, delante)
-    const tz = -0.65 * k;
-    const tr = 0.27 * k;
-    const top = cyl(tr, tr, 0.03, 0xc9a26b); top.position.set(0, h - 0.015, tz);
+    const tz = -0.65;
+    const top = cyl(0.27, 0.27, 0.03, 0xc9a26b); top.position.set(0, h - 0.015, tz);
     const leg = cyl(0.05, 0.07, h - 0.03, 0x8a6a4a); leg.position.set(0, (h - 0.03) / 2, tz);
     const plate = cyl(0.09, 0.09, 0.012, 0xfdf6e8); plate.position.set(0, h + 0.006, tz);
     this.props.add(top, leg, plate);
-    this.table = { x: 0, z: tz, h, r: tr, plateY: h + 0.012 };
+    this.table = { x: 0, z: tz, h, r: 0.27, plateY: h + 0.012 };
 
-    // Mesa(s) de provisiones al lado de trabajo (en bilateral, una a cada lado)
+    // Mesa de provisiones (al lado de trabajo del paciente)
+    const sx = 0.45 * sideSign; const sz = -0.4;
+    const stop = cyl(0.21, 0.21, 0.03, 0xb98557); stop.position.set(sx, h - 0.015, sz);
+    const sleg = cyl(0.045, 0.06, h - 0.03, 0x8a6a4a); sleg.position.set(sx, (h - 0.03) / 2, sz);
+    this.props.add(stop, sleg);
+    this.supply = { x: sx, z: sz, h, r: 0.21 };
+
+    // Tres recipientes sobre la mesa de provisiones
+    const spots = { carrot: [sx - 0.11, sz - 0.02], acorn: [sx + 0.0, sz + 0.08], seed: [sx + 0.11, sz - 0.02] };
+    const jar = new T.Mesh(new T.CylinderGeometry(0.05, 0.045, 0.1, 16), new T.MeshLambertMaterial({ color: 0xcfe9ef, transparent: true, opacity: 0.55 }));
+    jar.position.set(spots.carrot[0], h + 0.05, spots.carrot[1]);
+    const bowl = new T.Mesh(new T.SphereGeometry(0.055, 14, 10, 0, TAU, Math.PI / 2, Math.PI / 2), mat(0x8a5a3a));
+    bowl.position.set(spots.acorn[0], h + 0.055, spots.acorn[1]);
+    const cup = cyl(0.04, 0.035, 0.06, 0xd9c08a); cup.position.set(spots.seed[0], h + 0.03, spots.seed[1]);
+    this.props.add(jar, bowl, cup);
+
     this.spots = {};
-    this.supplies = [];
-    this.obstacles = ENV_OBSTACLES.slice();
-    this.tableObs = { x: 0, z: tz, r: tr + 0.03, h };
-    this.obstacles.push(this.tableObs);
-    for (const sd of sides) {
-      const sx = 0.45 * k * (sd === 'left' ? -1 : 1); const sz = -0.4 * k;
-      const sr = 0.21 * k;
-      const stop = cyl(sr, sr, 0.03, 0xb98557); stop.position.set(sx, h - 0.015, sz);
-      const sleg = cyl(0.045, 0.06, h - 0.03, 0x8a6a4a); sleg.position.set(sx, (h - 0.03) / 2, sz);
-      this.props.add(stop, sleg);
-      this.supplies.push({ x: sx, z: sz, h, r: sr });
-      this.obstacles.push({ x: sx, z: sz, r: sr + 0.06, h });
-
-      // Tres recipientes sobre la mesa de provisiones
-      const o = 0.11 * k;
-      const spots = { carrot: [sx - o, sz - 0.02 * k], acorn: [sx, sz + 0.08 * k], seed: [sx + o, sz - 0.02 * k] };
-      const jar = new T.Mesh(new T.CylinderGeometry(0.05, 0.045, 0.1, 16), new T.MeshLambertMaterial({ color: 0xcfe9ef, transparent: true, opacity: 0.55 }));
-      jar.position.set(spots.carrot[0], h + 0.05, spots.carrot[1]);
-      const bowl = new T.Mesh(new T.SphereGeometry(0.055, 14, 10, 0, TAU, Math.PI / 2, Math.PI / 2), mat(0x8a5a3a));
-      bowl.position.set(spots.acorn[0], h + 0.055, spots.acorn[1]);
-      const cup = cyl(0.04, 0.035, 0.06, 0xd9c08a); cup.position.set(spots.seed[0], h + 0.03, spots.seed[1]);
-      this.props.add(jar, bowl, cup);
-      for (const kind of Object.keys(spots)) {
-        const key = sd + '-' + kind;
-        this.spots[key] = { kind, x: spots[kind][0], y: h + (kind === 'carrot' ? 0.13 : 0.075), z: spots[kind][1] };
-        this.spawnItem(key);
-      }
+    for (const k of Object.keys(spots)) {
+      const base = { x: spots[k][0], y: h + (k === 'carrot' ? 0.13 : k === 'acorn' ? 0.075 : 0.075), z: spots[k][1] };
+      this.spots[k] = base;
+      this.spawnItem(k);
     }
-    this.supply = this.supplies[0];
-  }
 
-  // Escala de la mesita según el alcance cómodo: 1 con 0,70 m o más; menos alcance, todo más cerca.
-  layoutScale() {
-    const r = this.host.reach && this.host.reach();
-    const cap = r && r > 0 ? r : 0.35;
-    return clamp(cap / 0.70, 0.5, 1);
+    // La mesa y las provisiones son obstáculos para los animales de suelo
+    this.obstacles = ENV_OBSTACLES.slice();
+    this.tableObs = { x: 0, z: tz, r: 0.3, h };
+    this.obstacles.push(this.tableObs, { x: sx, z: sz, r: 0.27, h });
   }
 
   makeFoodMesh(kind) {
@@ -225,14 +207,12 @@ export class Critters {
     return g;
   }
 
-  spawnItem(key) {
-    const spot = this.spots[key];
-    if (!spot) return null;
-    const kind = spot.kind;
+  spawnItem(kind) {
+    const spot = this.spots[kind];
     const mesh = this.makeFoodMesh(kind);
     mesh.position.set(spot.x, spot.y, spot.z);
     this.props.add(mesh);
-    const it = { kind, spotKey: key, mesh, state: 'home', holder: null, home: { x: spot.x, y: spot.y, z: spot.z }, back: 0 };
+    const it = { kind, mesh, state: 'home', holder: null, home: { ...spot }, back: 0 };
     this.items.push(it);
     return it;
   }
@@ -244,8 +224,7 @@ export class Critters {
     if (!this.active || !this.table) return;
     const eyeH = clamp((this.host.eyeH && this.host.eyeH()) || 1.15, 0.8, 1.9);
     const h = clamp(eyeH * 0.62, 0.6, 0.95);
-    // También se rearma si cambió el alcance calibrado (la mesita se acerca o se aleja dentro del alcance cómodo).
-    if (Math.abs(h - this.table.h) < 0.02 && Math.abs(this.layoutScale() - (this.layoutK || 0)) < 0.01) return;
+    if (Math.abs(h - this.table.h) < 0.02) return;
     if (this.items.some((i) => i.state === 'held') || Object.values(this.animals).some((a) => a.feeding)) return;
     this.buildProps();
   }
@@ -425,7 +404,7 @@ export class Critters {
             if (this.plate === best) this.plate = null;
             best.state = 'held'; best.holder = st.id; st.held = best;
             if (this.host.haptic) this.host.haptic(25, 0.25);
-            if (best.home && !best.replaced) { best.replaced = true; this.pendingRespawn = this.pendingRespawn || []; this.pendingRespawn.push({ key: best.spotKey, at: this.time + 1.0 }); }
+            if (best.home && !best.replaced) { best.replaced = true; this.pendingRespawn = this.pendingRespawn || []; this.pendingRespawn.push({ kind: best.kind, at: this.time + 1.0 }); }
           }
         }
       } else if (st.grasp) {
@@ -437,7 +416,7 @@ export class Critters {
     // Reposición de provisiones (siempre hay más)
     if (this.pendingRespawn) {
       this.pendingRespawn = this.pendingRespawn.filter((p) => {
-        if (this.time >= p.at) { this.spawnItem(p.key); return false; }
+        if (this.time >= p.at) { this.spawnItem(p.kind); return false; }
         return true;
       });
     }

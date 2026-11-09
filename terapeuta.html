@@ -433,9 +433,10 @@
         <div style="border-top: 1px solid var(--line); padding-top: 14px;">
           <label style="margin-top:0; color:var(--muted);">Control Clínico Directo de Emergencia</label>
           <p id="sessionNote" style="margin:4px 0 0; font-size:0.9rem; color:var(--muted);"></p>
+          <p style="margin:4px 0 0; font-size:0.8rem; color:var(--muted);">🎯 <b>Recentrar</b>: pide que mire al frente en su postura normal y pulsa una vez. Ajusta posición, dirección y altura de ojos.</p>
           <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:8px;">
             <button id="directPauseBtn" class="action-btn secondary-btn" type="button">⏸ Pausar</button>
-            <button id="directRecenterBtn" class="action-btn secondary-btn" type="button" style="border-color:var(--acc); color:var(--acc); font-weight:700;">🎯 Recentrar</button>
+            <button id="directRecenterBtn" class="action-btn secondary-btn" type="button" title="Centra el juego en la posición, la dirección de la mirada y la altura de ojos actuales del paciente. Pídele que mire al frente en su postura normal." style="border-color:var(--acc); color:var(--acc); font-weight:700;">🎯 Recentrar</button>
             <button id="directFinishBtn" class="action-btn danger-btn" type="button">⏹ Finalizar</button>
           </div>
           <button id="newSessionBtn" class="action-btn secondary-btn" type="button" style="margin-top:10px;">🔄 Nueva sesión (limpiar pantalla)</button>
@@ -603,5 +604,8 @@
 
 <p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.5.1 · prototipo no validado clínicamente</p>
 <script type="module" src="./terapeuta.js"></script>
+<script>
+if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); }); }
+</script>
 </body>
 </html>

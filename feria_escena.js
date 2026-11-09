@@ -91,6 +91,16 @@ export class FairScene {
       this.statics.add(flag);
     }
 
+    // Red de fondo (translúcida): marca hasta dónde llegan las pelotas
+    if (L.net) {
+      const net = new T.Mesh(
+        new T.PlaneGeometry(L.net.halfW * 2, 1.6),
+        new T.MeshBasicMaterial({ color: 0x9fd8c4, transparent: true, opacity: 0.28, side: T.DoubleSide, depthWrite: false })
+      );
+      net.position.set(0, 0.8, L.net.backZ);
+      this.statics.add(net);
+    }
+
     // Bandejas de pelotas (cajas bajas abiertas)
     for (const b of L.bins) {
       const wall = BIN.wall; const wh = BIN.wallH;
