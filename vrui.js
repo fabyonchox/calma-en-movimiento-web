@@ -13,10 +13,8 @@ export class VRPanel {
     this.texture.colorSpace = THREE.SRGBColorSpace;
     this.mesh = new THREE.Mesh(
       new THREE.PlaneGeometry(width, height),
-      // Los diálogos se dibujan siempre por encima de la escena (tarros, pelotas, árbol): nada los tapa.
-      new THREE.MeshBasicMaterial({ map: this.texture, transparent: true, depthTest: false, depthWrite: false })
+      new THREE.MeshBasicMaterial({ map: this.texture, transparent: true })
     );
-    this.mesh.renderOrder = 100;
     this.rects = [];
     this.hover = null;
     this.model = null;
@@ -73,8 +71,8 @@ export class VRPanel {
 
       // 1. Fondo de cristal translúcido (Glassmorphism con gradiente)
       const bgGrad = c.createLinearGradient(0, 0, 0, H);
-      bgGrad.addColorStop(0.0, 'rgba(13, 30, 36, 0.99)');
-      bgGrad.addColorStop(1.0, 'rgba(18, 48, 56, 0.99)');
+      bgGrad.addColorStop(0.0, 'rgba(13, 30, 36, 0.94)');
+      bgGrad.addColorStop(1.0, 'rgba(18, 48, 56, 0.91)');
       c.fillStyle = bgGrad;
       c.beginPath();
       c.roundRect(8, 8, W - 16, H - 16, 36);
@@ -110,71 +108,66 @@ export class VRPanel {
         startY = 70;
       }
 
-      // 3-5. Título, barra de progreso y texto. Se mide primero (sin dibujar) y se reduce la letra
-      // hasta que quede espacio para los botones: el texto nunca se encima ni empuja los botones fuera del panel.
-      const buttons = m.buttons || [];
-      const nB = buttons.length;
-      const rowsB = nB ? Math.ceil(nB / Math.min(m.cols || nB, nB)) : 0;
-      const minBtnH = nB ? rowsB * 72 + (rowsB - 1) * 14 : 0;
-      const textLimit = H - 46 - 12 - minBtnH; // borde inferior permitido para el texto
-      const ts0 = m.titleSize || 50;
-      const ls0 = m.lineSize || 30;
+      // 3. Título del panel
+      c.textAlign = 'center';
+      c.textBaseline = 'middle';
+      const ts = m.titleSize || 50;
+      const ls = m.lineSize || 30;
+      let y = startY + ts * 0.85;
 
-      const textPass = (k, draw) => {
-        const ts = Math.round(ts0 * k);
-        const ls = Math.round(ls0 * k);
-        let y = startY + ts * 0.85;
-        c.textAlign = 'center';
-        c.textBaseline = 'middle';
-        c.shadowColor = draw ? 'rgba(0, 0, 0, 0.55)' : 'transparent';
-        c.shadowBlur = draw ? 8 : 0;
-        c.font = 'bold ' + ts + 'px sans-serif';
-        c.fillStyle = '#ffffff';
-        const titleOut = wrap(c, m.title || '', W / 2, y, W - 110, ts * 1.15, draw);
-        y = titleOut.length ? titleOut[titleOut.length - 1].y + ts * 0.5 : y + ts * 0.5;
-        c.shadowColor = 'transparent';
+      c.shadowColor = 'rgba(0, 0, 0, 0.55)';
+      c.shadowBlur = 8;
+      c.font = 'bold ' + ts + 'px sans-serif';
+      c.fillStyle = '#ffffff';
 
-        if (m.progress !== undefined && m.progress !== null) {
-          const barW = W - 160;
-          const barH = 14;
-          const barX = 80;
-          const barY = y + 4;
-          if (draw) {
-            c.fillStyle = 'rgba(255, 255, 255, 0.14)';
-            c.beginPath();
-            c.roundRect(barX, barY, barW, barH, 7);
-            c.fill();
-            const fillW = Math.max(0, Math.min(barW, barW * m.progress));
-            if (fillW > 0) {
-              const pGrad = c.createLinearGradient(barX, 0, barX + fillW, 0);
-              pGrad.addColorStop(0, '#2ea880');
-              pGrad.addColorStop(1, '#56e2b6');
-              c.fillStyle = pGrad;
-              c.beginPath();
-              c.roundRect(barX, barY, fillW, barH, 7);
-              c.fill();
-            }
-          }
-          y = barY + barH + 20;
-        } else {
-          y += ts * 0.25;
+      const titleOut = wrap(c, m.title || '', W / 2, y, W - 110, ts * 1.15);
+      if (titleOut && titleOut.length) {
+        y = titleOut[titleOut.length - 1].y + ts * 0.5;
+      } else {
+        y += ts * 0.5;
+      }
+      c.shadowColor = 'transparent';
+
+      // 4. Barra de progreso visual si está presente
+      if (m.progress !== undefined && m.progress !== null) {
+        const barW = W - 160;
+        const barH = 14;
+        const barX = 80;
+        const barY = y + 4;
+
+        c.fillStyle = 'rgba(255, 255, 255, 0.14)';
+        c.beginPath();
+        c.roundRect(barX, barY, barW, barH, 7);
+        c.fill();
+
+        const fillW = Math.max(0, Math.min(barW, barW * m.progress));
+        if (fillW > 0) {
+          const pGrad = c.createLinearGradient(barX, 0, barX + fillW, 0);
+          pGrad.addColorStop(0, '#2ea880');
+          pGrad.addColorStop(1, '#56e2b6');
+          c.fillStyle = pGrad;
+          c.beginPath();
+          c.roundRect(barX, barY, fillW, barH, 7);
+          c.fill();
         }
+        y = barY + barH + 20;
+      } else {
+        y += ts * 0.25;
+      }
 
-        c.font = ls + 'px sans-serif';
-        c.fillStyle = '#d5ebe4';
-        for (const line of m.lines || []) {
-          if (!line || !String(line).trim()) continue;
-          const out = wrap(c, line, W / 2, y, W - 130, ls * 1.25, draw);
-          if (out.length) y = out[out.length - 1].y + ls * 1.35;
+      // 5. Líneas de texto explicativo (blindado contra vacíos)
+      c.font = ls + 'px sans-serif';
+      c.fillStyle = '#d5ebe4';
+      for (const line of m.lines || []) {
+        if (!line || !String(line).trim()) continue;
+        const out = wrap(c, line, W / 2, y, W - 130, ls * 1.25);
+        if (out && out.length) {
+          y = out[out.length - 1].y + ls * 1.35;
         }
-        return y;
-      };
-
-      let fit = 1;
-      while (fit > 0.55 && textPass(fit, false) > textLimit) fit = Math.round((fit - 0.05) * 100) / 100;
-      const y = textPass(fit, true);
+      }
 
       // 6. Botones de interacción
+      const buttons = m.buttons || [];
       if (buttons.length) {
         const top = Math.max(y + 12, H * 0.48);
         this.rects = layoutButtons(buttons, { x: 50, y: top, w: W - 100, h: H - top - 46 }, m.cols);
@@ -230,7 +223,8 @@ export class VRPanel {
         }
 
         c.fillStyle = hot ? '#082025' : '#ffffff';
-        drawLabel(c, r.label, r);
+        c.font = 'bold ' + Math.min(40, r.h * 0.44) + 'px sans-serif';
+        c.fillText(r.label, r.x + r.w / 2, r.y + r.h / 2 + 2);
       }
 
       this.texture.needsUpdate = true;
@@ -240,10 +234,12 @@ export class VRPanel {
   }
 }
 
-function wrapLines(c, text, maxW) {
+function wrap(c, text, cx, y, maxW, lineH) {
+  if (!text) return [];
+  const words = String(text).split(' ');
   const lines = [];
   let cur = '';
-  for (const w of String(text || '').split(' ')) {
+  for (const w of words) {
     if (!w) continue;
     const test = cur ? cur + ' ' + w : w;
     if (c.measureText(test).width > maxW && cur) {
@@ -254,35 +250,12 @@ function wrapLines(c, text, maxW) {
     }
   }
   if (cur) lines.push(cur);
-  return lines;
-}
-
-function wrap(c, text, cx, y, maxW, lineH, draw = true) {
-  if (!text) return [];
-  const lines = wrapLines(c, text, maxW);
   const out = [];
   let cy = y;
   for (let i = 0; i < lines.length; i++) {
-    if (draw) c.fillText(lines[i], cx, cy);
+    c.fillText(lines[i], cx, cy);
     out.push({ text: lines[i], y: cy });
     cy += lineH;
   }
   return out;
-}
-
-// Etiqueta de botón: se parte en líneas y se reduce la letra hasta que quepa dentro de la tarjeta.
-function drawLabel(c, label, r) {
-  const maxW = Math.max(20, r.w - 28);
-  const maxH = Math.max(16, r.h - 14);
-  let size = Math.min(40, r.h * 0.44);
-  let lines = [];
-  for (; size >= 16; size -= 2) {
-    c.font = 'bold ' + size + 'px sans-serif';
-    lines = wrapLines(c, label, maxW);
-    if (lines.length * size * 1.15 <= maxH && lines.every((l) => c.measureText(l).width <= maxW)) break;
-  }
-  c.font = 'bold ' + Math.max(16, size) + 'px sans-serif';
-  const lh = Math.max(16, size) * 1.15;
-  const y0 = r.y + r.h / 2 - ((lines.length - 1) * lh) / 2 + 2;
-  lines.forEach((l, i) => c.fillText(l, r.x + r.w / 2, y0 + i * lh));
 }

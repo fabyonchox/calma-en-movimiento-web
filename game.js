@@ -2,10 +2,9 @@ import * as THREE from './libs/three.module.min.js';
 import { FairScene } from './feria_escena.js';
 import {
   DEFAULTS, ZONES, SIZES, MESSAGES, normalizeConfig, mergeConfig, REMOTE_KEYS, effectiveDistances, pickTarget,
-  horizontalDistance, distance, formatTime, newRecord, buildCSV, buildSummary, sustainedReach,
+  horizontalDistance, distance, formatTime, newRecord, buildCSV, buildSummary,
 } from './logic.js';
 import { VRPanel } from './vrui.js';
-import { Critters } from './critters.js';
 import { HeadsetSyncClient } from './sync-client.js';
 
 const $ = (id) => document.getElementById(id);
@@ -17,7 +16,6 @@ const f2 = (n) => n.toFixed(2);
 const ORB_COLORS = [0xfff3a0, 0xa0e3ff, 0xa8f0cf]; // amarillo claro, celeste, verde menta
 
 let renderer, scene, camera, anchor, menuPanel, hudPanel, orb, popRing, session, audioCtx, ambient;
-let critters = null; // animalitos de la pantalla de espera
 let fairScene = null; // escenario Feria de juegos
 let treeGroup, basketGroup, targetAppleGroup, harvestedApplesGroup, basketRimGlow;
 const baskets = []; // canasto izquierdo y derecho
@@ -866,17 +864,6 @@ function initThree() {
   buildBasket();
   buildTargetApple();
   fairScene = new FairScene(THREE, anchor, fairHost());
-  critters = new Critters(THREE, anchor, {
-    // Manos activas del paciente (punta del índice o mando) y si están pellizcando/agarrando
-    hands: () => controllers.filter(ctrlActive).map((c, i) => {
-      const p = handLocal(c);
-      return { id: ctrlSide(c) || ('h' + i), p: { x: p.x, y: p.y, z: p.z }, grasp: isControllerGrasping(c) };
-    }),
-    eyeH: () => S.eyeH || 1.15,
-    side: () => (S.cfg && S.cfg.side) || 'right',
-    reach: () => S.reach || null, // la mesita queda dentro del alcance cómodo calibrado
-    haptic: (ms, k) => triggerHaptic(ms, k),
-  });
   for (let i = 0; i < 2; i++) {
     const h = new THREE.Group();
     h.add(
@@ -1374,11 +1361,9 @@ function placeAnchor() {
   S.cfg.eyeH = S.eyeH; // Pasar altura real del paciente a la cinemática de spawn
 
   menuPanel.mesh.position.set(0, S.eyeH - 0.05, -1.0);
-  // Botón de Pausa arriba a la derecha y bien lateral: fuera del área de juego y del recorrido de los brazos,
-  // para que no se pulse por accidente (la pausa ofrece "Finalizar sesión"). Se orienta hacia la cabeza.
-  hudPanel.mesh.position.set(0.8, S.eyeH + 0.3, -0.95);
-  hudPanel.mesh.rotation.order = 'YXZ';
-  hudPanel.mesh.rotation.set(0.2, -Math.atan2(0.8, 0.95), 0);
+  // HUD elevado al ángulo superior: visible levantando la mirada, pero fuera de la zona de alcance de los brazos
+  hudPanel.mesh.position.set(0, S.eyeH + 0.44, -1.25);
+  hudPanel.mesh.rotation.x = 0.28;
 
   // Canastos a izquierda y derecha del paciente
   for (const b of baskets) {
@@ -1568,10 +1553,9 @@ function phaseModel() {
             lines: [
               'Mira al frente y mantén una postura relajada.',
               usingHands()
-                ? 'Pide que extienda el brazo hasta donde sea cómodo y sin dolor y lo mantenga; luego pulsa «Registrar alcance» (se toma el máximo de los últimos 4 s).'
-                : 'Pide que extienda el brazo hasta donde sea cómodo y sin dolor y lo mantenga; luego pulsa «Registrar alcance» (se toma el máximo de los últimos 4 s).',
+                ? 'Extiende tu brazo hasta donde sea agradable y sin dolor, y pulsa "Registrar alcance" tocando el botón o con pellizco.'
+                : 'Extiende tu brazo hasta donde sea agradable y sin dolor, y pulsa "Registrar alcance" con el gatillo.',
               eyeLine(),
-              reachLine(),
               S.calibHint,
             ].filter(Boolean),
             lineSize: 30,
@@ -1878,14 +1862,7 @@ function onButton(id, c, isRemote = false) {
       break;
     case 'recenter':
       // Recentrar el jardín según la posición actual de la cabeza (no mientras hay una manzana en la mano).
-      if (['calib', 'painBefore', 'ready', 'pause', 'play'].includes(S.phase) && !S.heldApple && !S.droppingApple) {
-        // Un solo botón: centra el juego en la posición, la dirección de la mirada y la ALTURA DE OJOS actuales del paciente.
-        placeAnchor();
-        // La feria y la mesita de comida dependen de la altura: se rearman con la altura nueva (salvo con una pelota en la mano).
-        if (isFair() && !(fairScene && fairScene.holding())) layoutFair();
-        if (critters) critters.refreshHeight();
-        broadcastState();
-      }
+      if (['calib', 'painBefore', 'ready', 'pause', 'play'].includes(S.phase) && !S.heldApple && !S.droppingApple) placeAnchor();
       break;
     case 'done': commitRecord(); S.phase = 'rest'; break;
     case 'leave':
@@ -1944,73 +1921,27 @@ function layoutFair() {
   return S.fairOk;
 }
 
-// Alcance horizontal de las manos de trabajo en este instante (null si no se detecta ninguna).
-function currentReach() {
-  const head = headLocal();
-  let r = null;
-  for (const ctrl of handCtrls().filter(ctrlActive)) {
-    const d = horizontalDistance(handLocal(ctrl), head);
-    r = r === null ? d : Math.max(r, d);
-  }
-  return r;
-}
-
-// Durante la calibración se recuerda el alcance de los últimos segundos. Así, aunque el terapeuta pulse
-// «Registrar alcance» desde su pantalla un momento después de que el paciente estire el brazo, se toma el máximo real.
-const REACH_WINDOW_MS = 4000;
-const MIN_VALID_REACH = 0.35; // por debajo, la mano está en reposo (los objetivos quedarían en la cara)
-let reachSamples = [];
-let lastCalibBroadcast = 0;
-function sampleReach(now) {
-  const r = currentReach();
-  // Lecturas imposibles para un brazo (más de 1,30 m desde la cabeza) son errores del seguimiento: se descartan.
-  if (r !== null && r <= 1.3) reachSamples.push({ t: now, r });
-  while (reachSamples.length && now - reachSamples[0].t > REACH_WINDOW_MS) reachSamples.shift();
-  return r;
-}
-// Alcance que el paciente MANTUVO (al menos medio segundo) en los últimos 4 s. No se usa el pico de un instante:
-// un salto del seguimiento de manos podía registrar un alcance falso (por ejemplo 1,30 m) y dejar objetivos lejos.
-const REACH_HOLD_MS = 500;
-function recentMaxReach() {
-  return sustainedReach(reachSamples, REACH_HOLD_MS);
-}
-let reachLineCache = ''; let reachLineAt = 0;
-function reachLine() {
-  const t = performance.now();
-  if (reachLineCache && t - reachLineAt < 400) return reachLineCache; // evita redibujar el panel en cada cuadro
-  reachLineAt = t;
-  reachLineCache = reachLineRaw();
-  return reachLineCache;
-}
-function reachLineRaw() {
-  const cur = currentReach();
-  if (cur === null && !reachSamples.length) return 'No se detectan las manos del paciente.';
-  const f = (v) => v.toFixed(2).replace('.', ',') + ' m';
-  return 'Alcance ahora: ' + (cur === null ? '—' : f(cur)) + ' · mantenido (½ s) en los últimos 4 s: ' + f(recentMaxReach()) + ' (mínimo ' + f(MIN_VALID_REACH) + ')';
-}
-
 function measureReach(c) {
   // Se mide la mano del lado de trabajo (con "Bilateral", la que llegue más lejos), no la que pulsó el botón:
   // así también funciona cuando el evaluador pulsa "Registrar alcance" desde la tablet.
-  // Alcance mantenido; si aún no hay medio segundo de datos (recién empieza la calibración), la lectura actual.
-  let r = recentMaxReach() || currentReach() || 0;
-  if (r === 0) {
+  const head = headLocal();
+  let r = 0;
+  const working = handCtrls().filter(ctrlActive);
+  for (const ctrl of working) r = Math.max(r, horizontalDistance(handLocal(ctrl), head));
+  if (!working.length) {
     const ctrl = c && controllers.find((x) => x.obj === c);
     if (ctrl && ctrlActive(ctrl)) {
-      r = horizontalDistance(handLocal(ctrl), headLocal());
+      r = horizontalDistance(handLocal(ctrl), head);
     } else {
       S.calibHint = 'No se detecta la mano de trabajo. Acércala para que el visor la vea e inténtalo de nuevo.';
-      broadcastState();
       return;
     }
   }
-  if (r < MIN_VALID_REACH) {
-    S.calibHint = 'Alcance muy corto (' + r.toFixed(2).replace('.', ',') + ' m): pide que extienda el brazo un poco más, solo si es cómodo, y vuelve a registrar.';
-    broadcastState();
+  if (r < 0.25) {
+    S.calibHint = 'Extiende un poco más, solo si es cómodo.';
     return;
   }
   S.reach = Math.min(1.3, r);
-  if (critters) critters.refreshHeight(); // la mesita se acomoda al alcance recién medido
   S.calibHint = '';
   if (isFair()) layoutFair();
   S.phase = 'painBefore';
@@ -2241,42 +2172,19 @@ function update(dt, now) {
   // Ocultar esferas de respaldo cuando los modelos 3D detallados están activos
   hands.forEach((h) => { h.visible = false; });
 
-  if (S.phase === 'calib') {
-    sampleReach(now);
-    // El terapeuta ve el alcance en vivo: se reenvía la tarjeta unas 2 veces por segundo mientras se calibra.
-    if (now - lastCalibBroadcast > 500) { lastCalibBroadcast = now; broadcastState(); }
-  } else if (reachSamples.length) {
-    reachSamples = [];
-  }
-
   const pm = phaseModel();
-  // Con el terapeuta conectado, las preguntas y menús (dolor, calibración, inicio, satisfacción, resumen) se ven y se
-  // responden SOLO en su pantalla. Dentro del visor queda el jardín con animalitos. Sin terapeuta, el menú sale
-  // en el visor como respaldo para que el paciente no quede bloqueado.
-  // Excepción: PAUSA y DESCANSO siempre se ven en el visor, para que el paciente tenga su propia salida
-  // ("Continuar", "Finalizar", "Salir de realidad virtual") aunque la tablet esté conectada.
-  const patientPanel = ['pause', 'rest'].includes(S.phase);
-  const therapistOnly = !!(syncClient && syncClient.isConnected && syncClient.peerConnected) && !patientPanel;
-  menuPanel.mesh.visible = pm.panel === 'menu' && !therapistOnly;
+  menuPanel.mesh.visible = pm.panel === 'menu';
   // Panel de juego: solo el botón de Pausa, sin progreso ni tiempo (eso se ve en la tablet del evaluador).
   hudPanel.mesh.visible = pm.panel === 'hud';
-  if (pm.panel === 'menu' && !therapistOnly) menuPanel.set(pm.model);
+  if (pm.panel === 'menu') menuPanel.set(pm.model);
   if (pm.panel === 'hud') hudPanel.set(pm.model);
   updatePointers();
 
-  // Pantalla de espera: animalitos mientras el paciente espera y el terapeuta maneja los menús.
-  if (critters) {
-    critters.setVisible(therapistOnly && pm.panel === 'menu' && !['pause'].includes(S.phase));
-    critters.update(dt);
-  }
-
   const isApplesMode = !!(S.cfg && S.cfg.gameMode === 'apples');
   const isFairMode = isFair();
-  const waitingScene = !!(critters && critters.group.visible);
-  if (treeGroup) treeGroup.visible = isApplesMode && !waitingScene;
-  if (basketGroup) basketGroup.visible = isApplesMode && !waitingScene;
-  // La feria solo se ve mientras se juega (o en pausa). En escalas, resumen y descanso se oculta para que no se mezcle con los diálogos.
-  if (fairScene) fairScene.setVisible(isFairMode && fairScene.ready() && ['play', 'pause'].includes(S.phase));
+  if (treeGroup) treeGroup.visible = isApplesMode;
+  if (basketGroup) basketGroup.visible = isApplesMode;
+  if (fairScene) fairScene.setVisible(isFairMode && fairScene.ready() && !['settle', 'calib', 'bye'].includes(S.phase));
 
   if (S.phase !== 'play') return;
 
@@ -2544,4 +2452,4 @@ function loop() {
 
 initForm();
 
-export const __test = { S, update, onButton, phaseModel, enterVR, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get anchor() { return anchor; } };
+export const __test = { S, update, onButton, phaseModel, enterVR, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get anchor() { return anchor; } };
