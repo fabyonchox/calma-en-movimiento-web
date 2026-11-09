@@ -260,7 +260,10 @@ export class FairWorld {
       this.ballVsNet(b);
       if (b.p.y < b.r) { // suelo
         b.p.y = b.r;
-        if (b.v.y < 0) { b.v.y = -b.v.y * 0.45; b.bounces++; }
+        if (b.v.y < 0) {
+          if (b.v.y < -0.6) this.events.push({ type: 'bounce', x: b.p.x, speed: -b.v.y }); // para el sonido
+          b.v.y = -b.v.y * 0.45; b.bounces++;
+        }
         const f = Math.max(0, 1 - 2.2 * h);
         b.v.x *= f; b.v.z *= f;
         if (Math.abs(b.v.y) < 0.35) b.v.y = 0;
@@ -351,6 +354,7 @@ export class FairWorld {
       const vn = -(b.v.x * nx + b.v.z * nz); // rapidez con la que se acerca al tarro
       // Se empuja la pelota fuera del tarro
       b.p.x = c.p.x + nx * (CAN.r + b.r); b.p.z = c.p.z + nz * (CAN.r + b.r);
+      if (vn > 0.15) this.events.push({ type: 'clank', x: c.p.x, strength: vn }); // pelota contra lata (sonido)
       if (vn > KNOCK_SPEED) {
         const info = b.thrown ? { reach: b.releaseReach, point: b.point, ballId: b.id } : null;
         this.knock(c, { x: b.v.x * 0.55, y: 0.25 + Math.max(0, b.v.y) * 0.2, z: b.v.z * 0.55 }, info);
@@ -400,6 +404,7 @@ export class FairWorld {
     const yRest = rest(surface);
     if (c.p.y <= yRest) {
       c.p.y = yRest;
+      if (c.v.y < -0.4) this.events.push({ type: 'land', x: c.p.x, onFloor: surface === 0 }); // para el sonido
       if (c.v.y < 0) c.v.y = -c.v.y * 0.25;
       if (Math.abs(c.v.y) < 0.3) c.v.y = 0;
       const f = Math.max(0, 1 - 4 * h);

@@ -6,7 +6,7 @@ const CAN_COLORS = [0x6fb7e0, 0xf2c14e, 0xe07a8a];
 const GRAB_DIST = 0.10; // distancia mano-pelota para poder tomarla (m)
 
 export class FairScene {
-  // host: { controllers(), handLocal(c), grasping(c), haptic(ms, k), sound(kind), onThrow(info) -> punto, onCan(info), onResolved() }
+  // host: { controllers(), handLocal(c), grasping(c), haptic(ms, k), sound(kind, info), onThrow(info) -> punto, onCan(info), onResolved(ball) }
   constructor(THREE, anchor, host) {
     this.T = THREE;
     this.host = host;
@@ -171,6 +171,7 @@ export class FairScene {
           if (ball && w.grab(ball, c, p, T)) {
             this.holds.set(c, ball);
             this.host.haptic(30, 0.3);
+            this.host.sound('grab', { x: p.x });
           }
         }
       } else if (grasp) {
@@ -189,8 +190,9 @@ export class FairScene {
     for (const e of events) {
       if (e.type === 'can') {
         this.host.onCan({ reach: e.reach, can: e.can });
-        this.host.sound('can');
         this.host.haptic(40, 0.4);
+      } else if (e.type === 'clank' || e.type === 'land' || e.type === 'bounce' || e.type === 'rearm' || e.type === 'refill') {
+        this.host.sound(e.type, e);
       } else if (e.type === 'resolved') {
         this.host.onResolved(e.ball);
       }
@@ -201,7 +203,10 @@ export class FairScene {
   doRelease(c, ball, T) {
     this.holds.delete(c);
     const info = this.world.release(ball, T);
-    if (info.thrown) ball.point = this.host.onThrow(info);
+    if (info.thrown) {
+      ball.point = this.host.onThrow(info);
+      this.host.sound('throw', { x: info.pos.x, speed: info.speed });
+    }
     this.host.haptic(20, 0.2);
   }
 

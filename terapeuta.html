@@ -529,6 +529,23 @@
           </select>
         </div>
 
+        <div class="form-row" style="margin-bottom:12px;">
+          <div>
+            <label for="cfgGuide">Guía en el visor (luz con carita)</label>
+            <select id="cfgGuide">
+              <option value="on" selected>Activado (voz y texto)</option>
+              <option value="off">Desactivado</option>
+            </select>
+          </div>
+          <div>
+            <label for="cfgGuideProgress">Progreso junto al guía</label>
+            <select id="cfgGuideProgress">
+              <option value="off" selected>No mostrar al paciente</option>
+              <option value="on">Mostrar "3 de 10" en el visor</option>
+            </select>
+          </div>
+        </div>
+
         <button id="applyCfgBtn" class="action-btn" type="button" style="margin-top:16px;">
           📤 Enviar Configuración al Visor
         </button>
@@ -602,7 +619,7 @@
   </main>
 </div>
 
-<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.5.1 · prototipo no validado clínicamente</p>
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.7.0 · prototipo no validado clínicamente</p>
 <script type="module" src="./terapeuta.js"></script>
 <script>
 if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); }); }

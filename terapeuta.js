@@ -54,6 +54,7 @@ const MODE_ES = { apples: 'Cosecha del Manzano', lights: 'Jardín de Luces', fai
 const CFG_FIELDS = {
   gameMode: 'cfgMode', zone: 'cfgZone', side: 'cfgSide', position: 'cfgPos',
   minutes: 'cfgMin', reps: 'cfgReps', dwell: 'cfgDwell', size: 'cfgSize', feedback: 'cfgFeedback',
+  guide: 'cfgGuide', guideProgress: 'cfgGuideProgress',
 };
 
 // Las zonas salen de la misma lista que usa el visor (así lo que se elige aquí es lo que se registra allá).
@@ -108,6 +109,7 @@ function describeConfig(c) {
     c.minutes + ' min',
     c.reps + ' repeticiones',
     c.dwell + ' s por objetivo',
+    c.guide === 'off' ? 'sin guía' : 'con guía' + (c.guideProgress === 'on' ? ' y progreso visible' : ''),
   ].join(' · ');
 }
 

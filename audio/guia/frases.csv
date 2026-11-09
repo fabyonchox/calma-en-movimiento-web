@@ -1,0 +1,37 @@
+﻿archivo;texto
+bienvenida.mp3;Hola, bienvenido a tu sesión de rehabilitación virtual. Yo soy tu guía y te acompañaré durante el juego.
+calibra.mp3;Primero vamos a medir tu alcance. Estira el brazo hacia adelante hasta donde te sientas cómodo, y mantenlo quieto un momento.
+espera_animales.mp3;Estás en la sala de espera. Mientras tu kinesiólogo prepara la sesión, puedes alimentar a los animalitos con la comida de la mesa.
+espera.mp3;Estás en la sala de espera. Tu kinesiólogo está preparando la sesión.
+dolor_antes.mp3;Antes de comenzar, cuéntanos cómo te sientes.
+inst_apples_right.mp3;Vamos a cosechar manzanas. Con tu mano derecha, toma cada manzana del árbol y déjala en el canasto.
+inst_apples_left.mp3;Vamos a cosechar manzanas. Con tu mano izquierda, toma cada manzana del árbol y déjala en el canasto.
+inst_apples_both.mp3;Vamos a cosechar manzanas. Con cualquiera de tus manos, toma cada manzana del árbol y déjala en el canasto.
+inst_lights_right.mp3;Estás en el jardín de luces. Toca cada luz con tu mano derecha cuando aparezca, a tu propio ritmo.
+inst_lights_left.mp3;Estás en el jardín de luces. Toca cada luz con tu mano izquierda cuando aparezca, a tu propio ritmo.
+inst_lights_both.mp3;Estás en el jardín de luces. Toca cada luz con cualquiera de tus manos cuando aparezca, a tu propio ritmo.
+inst_fair_right.mp3;Bienvenido a la feria. Toma una pelota de la bandeja con tu mano derecha y lánzala para botar los tarros.
+inst_fair_left.mp3;Bienvenido a la feria. Toma una pelota de la bandeja con tu mano izquierda y lánzala para botar los tarros.
+inst_fair_both.mp3;Bienvenido a la feria. Toma una pelota de la bandeja con cualquiera de tus manos y lánzala para botar los tarros.
+comenzar.mp3;¡Comencemos!
+bien_1.mp3;¡Muy bien!
+bien_2.mp3;¡Excelente!
+bien_3.mp3;¡Así se hace!
+bien_4.mp3;¡Lo estás haciendo muy bien!
+bien_5.mp3;¡Genial, sigue así!
+bien_6.mp3;¡Perfecto!
+casi_1.mp3;Casi, te faltó un poquito.
+casi_2.mp3;Ups, a la siguiente lo harás mejor.
+casi_3.mp3;Tranquilo, tómate tu tiempo.
+casi_4.mp3;No pasa nada, sigamos.
+casi_feria.mp3;Casi. Intenta lanzar un poco más hacia los tarros.
+mitad.mp3;¡Vas en la mitad! Sigue así.
+falta_una.mp3;¡Te falta solo una!
+pausa.mp3;Tomemos un descanso. Cuando quieras, seguimos.
+seguimos.mp3;¡Seguimos!
+fin_meta.mp3;¡Lo lograste! Completaste la meta de hoy.
+fin_tiempo.mp3;Se terminó el tiempo. ¡Buen trabajo!
+fin_otro.mp3;Terminamos por hoy. ¡Gracias por tu esfuerzo!
+encuesta.mp3;Ahora tu kinesiólogo te hará unas preguntas.
+descanso.mp3;Puedes descansar. Gracias por tu esfuerzo de hoy.
+adios.mp3;¡Hasta la próxima!

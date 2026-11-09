@@ -1,8 +1,10 @@
 import * as THREE from './libs/three.module.min.js';
 import { FairScene } from './feria_escena.js';
+import { Guide, GuideVoice } from './guia.js';
+import { Sfx } from './sfx.js';
 import {
   DEFAULTS, ZONES, SIZES, MESSAGES, normalizeConfig, mergeConfig, REMOTE_KEYS, effectiveDistances, pickTarget,
-  horizontalDistance, distance, formatTime, newRecord, buildCSV, buildSummary,
+  horizontalDistance, distance, formatTime, newRecord, buildCSV, buildSummary, sustainedReach,
 } from './logic.js';
 import { VRPanel } from './vrui.js';
 import { Critters } from './critters.js';
@@ -19,6 +21,8 @@ const ORB_COLORS = [0xfff3a0, 0xa0e3ff, 0xa8f0cf]; // amarillo claro, celeste, v
 let renderer, scene, camera, anchor, menuPanel, hudPanel, orb, popRing, session, audioCtx, ambient;
 let critters = null; // animalitos de la pantalla de espera
 let fairScene = null; // escenario Feria de juegos
+let guide = null; // guía: luz con carita que acompaña al paciente
+let sfx = null; // sonidos de interacción
 let treeGroup, basketGroup, targetAppleGroup, harvestedApplesGroup, basketRimGlow;
 const baskets = []; // canasto izquierdo y derecho
 
@@ -167,6 +171,7 @@ function initForm() {
       onConfigUpdate: (newCfg) => {
         const wasApples = S.cfg ? S.cfg.gameMode === 'apples' : true;
         const wasMode = S.cfg ? S.cfg.gameMode : 'apples';
+        const wasSide = S.cfg ? S.cfg.side : 'right';
         // La tablet manda: solo se aceptan los campos permitidos y se normalizan (rangos, textos válidos).
         S.cfg = mergeConfig(S.cfg, newCfg);
         try { localStorage.setItem(CFG_KEY, JSON.stringify({ ...S.cfg, code: '' })); } catch (e) { /* ok */ }
@@ -194,6 +199,8 @@ function initForm() {
           S.popT = -1;
           S.nextSpawnAt = performance.now() + 500;
         }
+        // Si la tablet cambió la actividad o el lado mientras el paciente está en "listo", el guía lo vuelve a explicar.
+        if (guide && S.phase === 'ready' && (wasMode !== S.cfg.gameMode || wasSide !== S.cfg.side)) { guide.clear(); guideInstruction(); }
 
         broadcastState();
         broadcastMetrics();
@@ -866,6 +873,14 @@ function initThree() {
   buildBasket();
   buildTargetApple();
   fairScene = new FairScene(THREE, anchor, fairHost());
+  // Sonidos de interacción: se apagan si la retroalimentación es "solo visual"
+  sfx = new Sfx(() => audioCtx, () => !!(S.cfg && S.cfg.feedback !== 'visual'));
+  guide = new Guide(THREE, anchor, {
+    sfx,
+    voice: new GuideVoice('audio/guia/'),
+    enabled: () => !!(S.cfg && S.cfg.guide !== 'off'),
+    progressEnabled: () => !!(S.cfg && S.cfg.guideProgress === 'on'),
+  });
   critters = new Critters(THREE, anchor, {
     // Manos activas del paciente (punta del índice o mando) y si están pellizcando/agarrando
     hands: () => controllers.filter(ctrlActive).map((c, i) => {
@@ -874,6 +889,7 @@ function initThree() {
     }),
     eyeH: () => S.eyeH || 1.15,
     side: () => (S.cfg && S.cfg.side) || 'right',
+    reach: () => S.reach || null, // la mesita queda dentro del alcance cómodo calibrado
     haptic: (ms, k) => triggerHaptic(ms, k),
   });
   for (let i = 0; i < 2; i++) {
@@ -1279,6 +1295,7 @@ async function enterVR() {
     resetCounters();
     S.ended = false;
     S.endReason = '';
+    if (guide) { guide.clear(); guide.welcomed = false; }
     await renderer.xr.setSession(session);
     const mainEl = document.querySelector('main');
     if (mainEl) mainEl.style.display = 'none';
@@ -1373,6 +1390,7 @@ function placeAnchor() {
   S.cfg.eyeH = S.eyeH; // Pasar altura real del paciente a la cinemática de spawn
 
   menuPanel.mesh.position.set(0, S.eyeH - 0.05, -1.0);
+  if (guide) guide.place(S.eyeH);
   // Botón de Pausa arriba a la derecha y bien lateral: fuera del área de juego y del recorrido de los brazos,
   // para que no se pulse por accidente (la pausa ofrece "Finalizar sesión"). Se orienta hacia la cabeza.
   hudPanel.mesh.position.set(0.8, S.eyeH + 0.3, -0.95);
@@ -1846,6 +1864,7 @@ function onButton(id, c, isRemote = false) {
       if (isFair()) layoutFair();
       resetCounters();
       S.nextSpawnAt = performance.now() + 600;
+      if (guide && S.phase === 'ready') { guide.clear(); guideInstruction(); } // explica la nueva actividad
       break;
     case 'exit':
     case 'finish': finishRequested(isRemote); break;
@@ -1913,7 +1932,15 @@ function fairHost() {
     handLocal: (c) => handLocal(c),
     grasping: (c) => isControllerGrasping(c),
     haptic: (ms, k) => triggerHaptic(ms, k),
-    sound: (kind) => { if (kind === 'can') chime(); },
+    sound: (kind, info = {}) => {
+      if (!sfx) return;
+      if (kind === 'grab') sfx.ballGrab(info.x);
+      else if (kind === 'throw') sfx.throwWhoosh(info.x, info.speed);
+      else if (kind === 'clank') sfx.canHit(info.x, info.strength);
+      else if (kind === 'land') sfx.canLand(info.x, info.onFloor);
+      else if (kind === 'bounce') sfx.ballBounce(info.x, info.speed);
+      else if (kind === 'rearm' || kind === 'refill') sfx.rearm(0);
+    },
     // Cada pelota lanzada es un intento.
     onThrow: (info) => {
       S.spawned++;
@@ -1930,7 +1957,12 @@ function fairHost() {
       S.msgIdx = 1 + (S.hits % (MESSAGES.length - 1));
       broadcastMetrics();
     },
-    onResolved: () => { S.resolved++; },
+    // Cuando la pelota termina su recorrido: si botó al menos un tarro, felicita; si no, anima.
+    onResolved: (ball) => {
+      S.resolved++;
+      if (S.phase !== 'play') return;
+      if (ball && ball.point && ball.point.hit) guideHit(); else guideMiss();
+    },
   };
 }
 
@@ -1962,12 +1994,16 @@ let reachSamples = [];
 let lastCalibBroadcast = 0;
 function sampleReach(now) {
   const r = currentReach();
-  if (r !== null) reachSamples.push({ t: now, r });
+  // Lecturas imposibles para un brazo (más de 1,30 m desde la cabeza) son errores del seguimiento: se descartan.
+  if (r !== null && r <= 1.3) reachSamples.push({ t: now, r });
   while (reachSamples.length && now - reachSamples[0].t > REACH_WINDOW_MS) reachSamples.shift();
   return r;
 }
+// Alcance que el paciente MANTUVO (al menos medio segundo) en los últimos 4 s. No se usa el pico de un instante:
+// un salto del seguimiento de manos podía registrar un alcance falso (por ejemplo 1,30 m) y dejar objetivos lejos.
+const REACH_HOLD_MS = 500;
 function recentMaxReach() {
-  return reachSamples.reduce((m, s) => Math.max(m, s.r), 0);
+  return sustainedReach(reachSamples, REACH_HOLD_MS);
 }
 let reachLineCache = ''; let reachLineAt = 0;
 function reachLine() {
@@ -1981,13 +2017,14 @@ function reachLineRaw() {
   const cur = currentReach();
   if (cur === null && !reachSamples.length) return 'No se detectan las manos del paciente.';
   const f = (v) => v.toFixed(2).replace('.', ',') + ' m';
-  return 'Alcance ahora: ' + (cur === null ? '—' : f(cur)) + ' · máximo últimos 4 s: ' + f(recentMaxReach()) + ' (mínimo ' + f(MIN_VALID_REACH) + ')';
+  return 'Alcance ahora: ' + (cur === null ? '—' : f(cur)) + ' · mantenido (½ s) en los últimos 4 s: ' + f(recentMaxReach()) + ' (mínimo ' + f(MIN_VALID_REACH) + ')';
 }
 
 function measureReach(c) {
   // Se mide la mano del lado de trabajo (con "Bilateral", la que llegue más lejos), no la que pulsó el botón:
   // así también funciona cuando el evaluador pulsa "Registrar alcance" desde la tablet.
-  let r = Math.max(recentMaxReach(), currentReach() || 0);
+  // Alcance mantenido; si aún no hay medio segundo de datos (recién empieza la calibración), la lectura actual.
+  let r = recentMaxReach() || currentReach() || 0;
   if (r === 0) {
     const ctrl = c && controllers.find((x) => x.obj === c);
     if (ctrl && ctrlActive(ctrl)) {
@@ -2004,6 +2041,7 @@ function measureReach(c) {
     return;
   }
   S.reach = Math.min(1.3, r);
+  if (critters) critters.refreshHeight(); // la mesita se acomoda al alcance recién medido
   S.calibHint = '';
   if (isFair()) layoutFair();
   S.phase = 'painBefore';
@@ -2020,6 +2058,59 @@ function startPlay() {
   }
   S.phase = 'play';
   S.nextSpawnAt = performance.now() + 1000;
+}
+
+/* ================= Guía: qué dice en cada momento ================= */
+
+function handKey() { return S.cfg && (S.cfg.side === 'left' || S.cfg.side === 'both') ? S.cfg.side : 'right'; }
+
+function guideInstruction() {
+  if (!guide || !S.cfg) return;
+  guide.say('inst_' + (S.cfg.gameMode || 'apples') + '_' + handKey());
+}
+
+function guideOnPhase(prev, phase) {
+  if (!guide) return;
+  guide.clear(); // al cambiar de fase, lo que estaba diciendo o esperando ya no corresponde
+  if (phase === 'settle' || phase === 'calib') {
+    if (phase === 'calib') {
+      // Saludo una vez por cada entrada a la realidad virtual
+      if (!guide.welcomed) { guide.welcomed = true; guide.say('bienvenida'); }
+      guide.say('calibra');
+    }
+  } else if (phase === 'painBefore') {
+    // Con la tablet conectada el paciente espera con los animalitos; sin tablet, responde el dolor en el visor.
+    guide.say(syncClient && syncClient.isConnected && syncClient.peerConnected ? 'espera_animales' : 'dolor_antes');
+  } else if (phase === 'ready') {
+    guideInstruction();
+  } else if (phase === 'play') {
+    if (prev === 'pause') guide.sayNow('seguimos');
+    else { guide.say('comenzar'); S.guideMid = false; S.guideLast = false; }
+  } else if (phase === 'pause') {
+    guide.sayNow('pausa');
+  } else if (phase === 'painAfter') {
+    guide.clear();
+    guide.say(S.endReason === 'reps' ? 'fin_meta' : S.endReason === 'time' ? 'fin_tiempo' : 'fin_otro');
+    guide.say('encuesta');
+  } else if (phase === 'rest') {
+    guide.say('descanso');
+  } else if (phase === 'bye') {
+    guide.sayNow('adios');
+  }
+}
+
+// Comentarios durante el juego (estilo coaching, elegido por el equipo).
+function guideHit() {
+  if (!guide || S.phase !== 'play') return;
+  const reps = S.cfg.reps;
+  if (!S.guideLast && reps >= 3 && S.hits === reps - 1) { S.guideLast = true; guide.say('falta_una', 'high'); return; }
+  if (!S.guideMid && reps >= 6 && S.hits === Math.ceil(reps / 2)) { S.guideMid = true; guide.say('mitad', 'high'); return; }
+  guide.praise();
+}
+
+function guideMiss() {
+  if (!guide || S.phase !== 'play') return;
+  guide.miss(isFair());
 }
 
 function pausePlay() {
@@ -2095,6 +2186,7 @@ function spawnTarget() {
   orb.position.set(t.pos.x, t.pos.y, t.pos.z);
   orb.scale.setScalar(0.001);
   orb.visible = true;
+  if (sfx) sfx.lightAppear(t.pos.x);
 }
 
 function chime() {
@@ -2165,7 +2257,9 @@ function update(dt, now) {
 
     // Detección y broadcast inmediato de cambios automáticos de fase
     if (lastBroadcastedPhase !== S.phase) {
+      const prevPhase = lastBroadcastedPhase;
       lastBroadcastedPhase = S.phase;
+      guideOnPhase(prevPhase, S.phase);
       broadcastState();
       broadcastMetrics();
     }
@@ -2246,7 +2340,10 @@ function update(dt, now) {
   // Con el terapeuta conectado, las preguntas y menús (dolor, calibración, inicio, satisfacción, resumen) se ven y se
   // responden SOLO en su pantalla. Dentro del visor queda el jardín con animalitos. Sin terapeuta, el menú sale
   // en el visor como respaldo para que el paciente no quede bloqueado.
-  const therapistOnly = !!(syncClient && syncClient.isConnected && syncClient.peerConnected);
+  // Excepción: PAUSA y DESCANSO siempre se ven en el visor, para que el paciente tenga su propia salida
+  // ("Continuar", "Finalizar", "Salir de realidad virtual") aunque la tablet esté conectada.
+  const patientPanel = ['pause', 'rest'].includes(S.phase);
+  const therapistOnly = !!(syncClient && syncClient.isConnected && syncClient.peerConnected) && !patientPanel;
   menuPanel.mesh.visible = pm.panel === 'menu' && !therapistOnly;
   // Panel de juego: solo el botón de Pausa, sin progreso ni tiempo (eso se ve en la tablet del evaluador).
   hudPanel.mesh.visible = pm.panel === 'hud';
@@ -2258,6 +2355,14 @@ function update(dt, now) {
   if (critters) {
     critters.setVisible(therapistOnly && pm.panel === 'menu' && !['pause'].includes(S.phase));
     critters.update(dt);
+  }
+
+  // Guía: visible durante toda la sesión; se corre a la izquierda si hay un menú a la vista en el visor
+  if (guide) {
+    guide.setVisible(guide.enabled() && !['idle', 'settle'].includes(S.phase));
+    guide.setWide(menuPanel.mesh.visible);
+    guide.setProgress(S.hits, S.cfg.reps, S.spawned, S.phase === 'play' || S.phase === 'pause');
+    guide.update(dt);
   }
 
   const isApplesMode = !!(S.cfg && S.cfg.gameMode === 'apples');
@@ -2336,6 +2441,7 @@ function update(dt, now) {
             grabT: now
           };
           snapStem();
+          if (sfx) sfx.appleSnap(targetAppleGroup.position.x);
           targetAppleGroup.userData.twig.visible = false;
           triggerHaptic(35, 0.35);
           triggerSparks(targetAppleGroup.position);
@@ -2352,6 +2458,7 @@ function update(dt, now) {
         S.targetPoints.push({ x: S.target.pos.x, y: S.target.pos.y, z: S.target.pos.z, hit: false });
         S.popT = 0;
         S.popDur = 0.4;
+        guideMiss();
       }
     }
 
@@ -2402,7 +2509,7 @@ function update(dt, now) {
 
       if (da.mesh.position.y <= da.targetY) {
         da.mesh.position.y = da.targetY;
-        thudBasket();
+        if (sfx) sfx.appleBasket(da.mesh.position.x, (da.basket || baskets[0]).count); else thudBasket();
         chime();
         triggerHaptic(50, 0.45);
         triggerSparks(da.mesh.position);
@@ -2432,6 +2539,7 @@ function update(dt, now) {
         S.target = null;
         S.nextSpawnAt = now + 900;
         broadcastMetrics();
+        guideHit();
       }
     }
 
@@ -2469,6 +2577,8 @@ function update(dt, now) {
       S.targetPoints.push({ x: S.target.pos.x, y: S.target.pos.y, z: S.target.pos.z, hit: false });
       S.popT = 0;
       S.popDur = 0.4;
+      if (sfx) sfx.lightFade(S.target.pos.x);
+      guideMiss();
     }
   } else {
     S.popT += dt;
@@ -2521,7 +2631,8 @@ function harvest() {
   }
   triggerSparks(orb.position);
   triggerHaptic(50, 0.45);
-  chime();
+  if (sfx && S.cfg.feedback !== 'visual') sfx.sparkle(orb.position.x); else chime();
+  guideHit();
 }
 
 function loop() {
@@ -2534,4 +2645,4 @@ function loop() {
 
 initForm();
 
-export const __test = { S, update, onButton, phaseModel, enterVR, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get anchor() { return anchor; } };
+export const __test = { S, update, onButton, phaseModel, enterVR, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; } };

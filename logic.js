@@ -26,6 +26,8 @@ export const DEFAULTS = {
   feedback: 'both', // visual | sound | both
   ambient: true,
   limitReach: true,
+  guide: 'on', // guía (luz con carita): 'on' | 'off'
+  guideProgress: 'off', // ventanita '3 de 10' junto al guía en el visor: 'on' | 'off'
 };
 
 // Mensajes neutros (Fase 5). Sin lenguaje competitivo ni punitivo.
@@ -54,6 +56,8 @@ export function normalizeConfig(raw = {}) {
   if (!['visual', 'sound', 'both'].includes(c.feedback)) c.feedback = DEFAULTS.feedback;
   c.ambient = !!c.ambient;
   c.limitReach = !!c.limitReach;
+  c.guide = c.guide === 'off' || c.guide === false ? 'off' : 'on';
+  c.guideProgress = c.guideProgress === 'on' || c.guideProgress === true ? 'on' : 'off';
 
   c.minH = clamp(num(c.minH, DEFAULTS.minH), 0.3, 2.0);
   c.maxH = clamp(num(c.maxH, DEFAULTS.maxH), 0.4, 2.2);
@@ -70,7 +74,7 @@ export function normalizeConfig(raw = {}) {
 }
 
 // Campos que la tablet del evaluador puede cambiar en el visor. Cualquier otro campo se ignora.
-export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient'];
+export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'guide', 'guideProgress'];
 
 // Mezcla la configuración actual del visor con la que manda la tablet y la normaliza.
 export function mergeConfig(current, incoming) {
@@ -110,6 +114,25 @@ export function horizontalDistance(a, b) {
 
 // Si el kinesiólogo activó "limitar al alcance cómodo", ningún objetivo queda más lejos
 // de lo que el usuario marcó como cómodo al calibrar.
+// Alcance SOSTENIDO: el mayor valor que la mano mantuvo al menos `holdMs` seguidos (mínimo de cada tramo).
+// Así un salto momentáneo del seguimiento de manos, o un estirón de un instante, no queda como "alcance cómodo".
+// samples: [{t (ms), r (m)}] en orden de tiempo. Devuelve 0 si ningún tramo dura lo suficiente.
+export function sustainedReach(samples, holdMs = 500, toleranceMs = 60) {
+  let best = 0;
+  let j = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const tEnd = samples[i].t;
+    while (j < i && samples[j].t < tEnd - holdMs) j++;
+    // El tramo debe cubrir de verdad `holdMs` (hay una muestra justo antes de su inicio o en él)
+    const startIdx = j > 0 ? j - 1 : j;
+    if (tEnd - samples[startIdx].t < holdMs - toleranceMs) continue;
+    let m = Infinity;
+    for (let k = startIdx; k <= i; k++) m = Math.min(m, samples[k].r);
+    if (m > best) best = m;
+  }
+  return best;
+}
+
 export function effectiveDistances(cfg, reach) {
   let maxD = cfg.maxD;
   let minD = cfg.minD;
