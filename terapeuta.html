@@ -371,6 +371,23 @@
     background: var(--card-subtle);
   }
 
+  /* Banner de sala / casco */
+  .room-banner { max-width: 1180px; margin: 12px auto 0; padding: 14px 18px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 20px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .rb-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; min-width: 0; }
+  .rb-label { font-size: 0.8rem; font-weight: 800; letter-spacing: 0.12em; color: var(--muted); }
+  .rb-code { font-size: clamp(1.6rem, 5vw, 2.4rem); font-weight: 800; line-height: 1.1; color: var(--acc); overflow-wrap: anywhere; }
+  .rb-casco { font-size: 1.05rem; font-weight: 700; color: var(--ink); }
+  .rb-state { font-size: 0.95rem; font-weight: 700; padding: 5px 12px; border-radius: 999px; background: var(--card-subtle); color: var(--muted); border: 1px solid var(--line); transition: background 200ms ease, color 200ms ease; }
+  .rb-state[data-on="1"] { background: var(--success-light); color: var(--success); border-color: transparent; }
+  .rb-state[data-on="-1"] { background: var(--danger-light); color: var(--danger); border-color: transparent; }
+  .rb-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .rb-pill { font: inherit; font-weight: 700; font-size: 0.95rem; min-height: 44px; padding: 8px 16px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--card-subtle); color: var(--ink); cursor: pointer; transition: background 150ms ease, border-color 150ms ease, transform 150ms ease; }
+  .rb-pill:hover { border-color: var(--acc); }
+  .rb-pill:active { transform: scale(0.97); }
+  .rb-pill:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+  .rb-pill[aria-pressed="true"] { background: var(--acc); border-color: var(--acc); color: #fff; }
+  @media (max-width: 600px) { .room-banner { margin: 10px 0 0; } .rb-pills { width: 100%; } .rb-pill { flex: 1 1 0; padding: 8px 6px; } }
+
   /* Perfiles de paciente */
   .pc-muted { color: var(--muted); font-size: 0.9rem; margin: 6px 0; }
   .pc-who { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--muted); margin-bottom: 8px; }
@@ -436,6 +453,21 @@
       </div>
     </div>
   </header>
+
+  <!-- Sala y casco: bien visible para no confundir tablets ni visores -->
+  <section class="room-banner" id="roomBanner" aria-live="polite">
+    <div class="rb-main">
+      <span class="rb-label">SALA</span>
+      <span class="rb-code" id="rbCode">HOSPITAL-1</span>
+      <span class="rb-casco" id="rbCasco"></span>
+      <span class="rb-state" id="rbState" data-on="0">Esperando visor… ⏳</span>
+    </div>
+    <div class="rb-pills" role="group" aria-label="Elegir casco">
+      <button type="button" class="rb-pill" data-room="HOSPITAL-1">🎧 Casco 1</button>
+      <button type="button" class="rb-pill" data-room="HOSPITAL-2">🎧 Casco 2</button>
+      <button type="button" class="rb-pill" data-room="HOSPITAL-3">🎧 Casco 3</button>
+    </div>
+  </section>
 
   <!-- Fallback Offline Banner -->
   <div id="offlineBanner">

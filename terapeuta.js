@@ -200,6 +200,7 @@ function send(payload) {
 
 function setServerState(state) {
   isConnected = state === 'online';
+  updateRoomBanner();
   if (state === 'online') {
     serverDot.className = 'status-dot online';
     serverStatusText.textContent = 'En línea (Servidor)';
@@ -216,6 +217,7 @@ function setServerState(state) {
 
 function setHeadsetState(online) {
   isHeadsetOnline = online;
+  updateRoomBanner();
   if (online) {
     headsetStatusText.textContent = 'Visor conectado 🟢';
     headsetStatusText.style.color = 'var(--acc)';
@@ -230,6 +232,7 @@ function handleMessage(msg) {
     case 'room_joined':
       currentRoom = msg.room;
       roomCodeInput.value = currentRoom;
+      updateRoomBanner();
       setHeadsetState(!!msg.peerConnected);
       break;
 
@@ -646,6 +649,7 @@ $('changeRoomBtn').onclick = () => {
   const newCode = roomCodeInput.value.toUpperCase().trim();
   if (newCode && newCode !== currentRoom) {
     currentRoom = newCode;
+    updateRoomBanner();
     formFilled = false;
     try { localStorage.setItem('calma_room_code', currentRoom); } catch (e) {}
     send({
@@ -778,6 +782,31 @@ const patientsPanel = new PatientsPanel($('patientCard'), {
   buildSession: () => buildSessionRecord(true),
 });
 
+/* ---------- Banner de sala / casco ---------- */
+
+function updateRoomBanner() {
+  const code = $('rbCode');
+  if (!code) return;
+  code.textContent = currentRoom;
+  const m = /^HOSPITAL-(\d+)$/.exec(currentRoom);
+  $('rbCasco').textContent = m ? '· Casco ' + m[1] : '';
+  const st = $('rbState');
+  if (!isConnected) { st.textContent = 'Sin conexión con el servidor'; st.dataset.on = '-1'; }
+  else if (isHeadsetOnline) { st.textContent = 'Visor conectado 🟢'; st.dataset.on = '1'; }
+  else { st.textContent = 'Esperando visor… ⏳'; st.dataset.on = '0'; }
+  document.querySelectorAll('.rb-pill').forEach((b) => b.setAttribute('aria-pressed', b.dataset.room === currentRoom ? 'true' : 'false'));
+}
+
+document.querySelectorAll('.rb-pill').forEach((b) => {
+  b.onclick = () => {
+    // Cambiar de sala a mitad de una sesión desconecta esta tablet de su visor: se pide confirmar.
+    if (b.dataset.room !== currentRoom && currentPhase !== 'idle' && !confirm('Hay una sesión en curso en ' + currentRoom + '. ¿Cambiar a ' + b.dataset.room + ' de todas formas?')) return;
+    roomCodeInput.value = b.dataset.room;
+    $('changeRoomBtn').onclick();
+  };
+});
+
 // Conectar al cargar
 renderMetrics({});
+updateRoomBanner();
 connect();
