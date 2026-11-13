@@ -1378,13 +1378,47 @@ function onSessionEnd() {
   broadcastState();
 }
 
-function placeAnchor() {
+// keepYaw: no cambia hacia dónde mira el juego (lo usa el recentrado automático; solo ajusta posición y altura).
+const RECENTER_PHASES = ['calib', 'painBefore', 'ready', 'pause', 'play'];
+
+// Un solo botón: centra el juego en la posición, la dirección de la mirada y la ALTURA DE OJOS actuales del paciente.
+// auto = true: lo dispara el visor solo (cambio de postura); conserva hacia dónde mira el juego.
+function doRecenter(auto) {
+  if (!RECENTER_PHASES.includes(S.phase) || S.heldApple || S.droppingApple) return false;
+  if (auto && fairScene && fairScene.holding()) return false;
+  placeAnchor(auto);
+  // La feria y la mesita de comida dependen de la altura: se rearman con la altura nueva (salvo con una pelota en la mano).
+  if (isFair() && !(fairScene && fairScene.holding())) layoutFair();
+  if (critters) critters.refreshHeight();
+  autoRecenter.since = 0;
+  autoRecenter.lastAt = performance.now();
+  broadcastState();
+  return true;
+}
+
+// Recentrado automático: si el paciente cambia de postura (se sienta o se para) o se desplaza, y se mantiene así unos
+// segundos, el juego se vuelve a centrar solo. Un movimiento pasajero (inclinarse a tomar algo) no lo dispara.
+const AUTO_RECENTER = { dy: 0.2, dxz: 0.45, holdMs: 2500, cooldownMs: 6000 };
+const autoRecenter = { since: 0, lastAt: 0 };
+function checkAutoRecenter(now) {
+  if (!RECENTER_PHASES.includes(S.phase) || !S.cfg || !session) { autoRecenter.since = 0; return; }
+  if (S.heldApple || S.droppingApple || (fairScene && fairScene.holding())) { autoRecenter.since = 0; return; }
+  if (now - autoRecenter.lastAt < AUTO_RECENTER.cooldownMs) return;
+  const head = headLocal();
+  const off = Math.abs(head.y - S.eyeH) > AUTO_RECENTER.dy || Math.hypot(head.x, head.z) > AUTO_RECENTER.dxz;
+  if (!off) { autoRecenter.since = 0; return; }
+  if (!autoRecenter.since) { autoRecenter.since = now; return; }
+  if (now - autoRecenter.since >= AUTO_RECENTER.holdMs) doRecenter(true);
+}
+
+function placeAnchor(keepYaw = false) {
   camera.updateMatrixWorld(true);
   camera.getWorldPosition(tmpA);
   const d = camera.getWorldDirection(tmpB);
   const fallback = S.cfg.position === 'standing' ? 1.6 : 1.15;
+  const yaw = keepYaw ? anchor.rotation.y : Math.atan2(-d.x, -d.z);
   anchor.position.set(tmpA.x, S.hasFloor ? 0 : tmpA.y - fallback, tmpA.z);
-  anchor.rotation.set(0, Math.atan2(-d.x, -d.z), 0);
+  anchor.rotation.set(0, yaw, 0);
   anchor.updateMatrixWorld(true);
   S.eyeH = tmpA.y - anchor.position.y;
   S.cfg.eyeH = S.eyeH; // Pasar altura real del paciente a la cinemática de spawn
@@ -1896,14 +1930,7 @@ function onButton(id, c, isRemote = false) {
       break;
     case 'recenter':
       // Recentrar el jardín según la posición actual de la cabeza (no mientras hay una manzana en la mano).
-      if (['calib', 'painBefore', 'ready', 'pause', 'play'].includes(S.phase) && !S.heldApple && !S.droppingApple) {
-        // Un solo botón: centra el juego en la posición, la dirección de la mirada y la ALTURA DE OJOS actuales del paciente.
-        placeAnchor();
-        // La feria y la mesita de comida dependen de la altura: se rearman con la altura nueva (salvo con una pelota en la mano).
-        if (isFair() && !(fairScene && fairScene.holding())) layoutFair();
-        if (critters) critters.refreshHeight();
-        broadcastState();
-      }
+      doRecenter(false);
       break;
     case 'done': commitRecord(); S.phase = 'rest'; break;
     case 'leave':
@@ -2254,6 +2281,8 @@ function stopAmbient() {
 function update(dt, now) {
   try {
     if (S.phase === 'idle') return;
+
+    checkAutoRecenter(now);
 
     // Detección y broadcast inmediato de cambios automáticos de fase
     if (lastBroadcastedPhase !== S.phase) {
