@@ -2,7 +2,7 @@ import { getSyncServerUrl, getSessionCode } from './sync-config.js';
 import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure } from './logic.js';
 import { PatientsPanel } from './pacientes.js';
 
-const APP_VERSION = '0.9.2';
+const APP_VERSION = '0.9.3';
 
 let ws = null;
 let currentRoom = getSessionCode() || 'HOSPITAL-1';
@@ -341,27 +341,15 @@ function renderMirrorState(state) {
 
   mirrorButtonsContainer.innerHTML = '';
 
-  // 1. Escalas de Dolor EVN (0 a 10)
+  // La escala de dolor (EVN) ya no se usa. Si el visor la pide es porque tiene una versión anterior abierta.
   if (currentPhase === 'painBefore' || currentPhase === 'painAfter') {
-    const isBefore = currentPhase === 'painBefore';
-    const prefix = isBefore ? 'painB:' : 'painA:';
-    const grid = document.createElement('div');
-    grid.className = 'pain-grid';
-    grid.style.width = '100%';
-
-    for (let i = 0; i <= 10; i++) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'btn-pain';
-      btn.textContent = i;
-      // Gradiente clínico de verde a rojo
-      const hue = Math.max(0, 120 - i * 12);
-      btn.style.backgroundColor = `hsl(${hue}, 68%, 42%)`;
-      btn.onclick = () => triggerRemoteButton(prefix + i);
-      grid.appendChild(btn);
-    }
-    mirrorButtonsContainer.appendChild(grid);
-    if (!isBefore) appendSurveySkipButtons();
+    const note = document.createElement('div');
+    note.className = 'pc-status';
+    note.dataset.kind = 'warn';
+    note.style.width = '100%';
+    note.textContent = 'El visor está usando una versión anterior que todavía pregunta el dolor. Recarga la página en el visor (calmaenmovimiento.vercel.app) para actualizarlo.';
+    mirrorButtonsContainer.appendChild(note);
+    if (currentPhase === 'painAfter') appendSurveySkipButtons();
     return;
   }
 
@@ -526,6 +514,7 @@ function renderMetrics(m) {
   if (currentPhase === 'idle' && lastState) renderMirrorState(lastState);
   updateSessionNote();
   updateSummaryText();
+  updateRoomBanner();
   maybeAutoSaveSession();
 }
 
@@ -570,7 +559,9 @@ function updateSummaryText() {
 function applyLocalReset() {
   localSessionId = '';
   const keepConfig = currentMetrics.config;
+  const keepVersion = currentMetrics.version; // la versión del visor no cambia al limpiar la pantalla
   currentMetrics = freshMetrics();
+  currentMetrics.version = keepVersion;
   if (keepConfig) {
     currentMetrics.config = keepConfig;
     currentMetrics.reps = keepConfig.reps;
@@ -790,6 +781,15 @@ function updateRoomBanner() {
   else if (isHeadsetOnline) { st.textContent = 'Visor conectado 🟢'; st.dataset.on = '1'; }
   else { st.textContent = 'Esperando visor… ⏳'; st.dataset.on = '0'; }
   document.querySelectorAll('.rb-pill').forEach((b) => b.setAttribute('aria-pressed', b.dataset.room === currentRoom ? 'true' : 'false'));
+
+  // Versión del visor: si es distinta de la de esta pantalla, el visor tiene la página vieja abierta y hay que recargarla.
+  const ver = $('rbVer');
+  if (ver) {
+    const seen = isHeadsetOnline && currentMetrics.config; // ya llegó información del visor
+    if (!seen) { ver.textContent = ''; ver.dataset.warn = '0'; }
+    else if (currentMetrics.version === APP_VERSION) { ver.textContent = 'Visor v' + APP_VERSION; ver.dataset.warn = '0'; }
+    else { ver.textContent = '⚠ Visor desactualizado' + (currentMetrics.version ? ' (v' + currentMetrics.version + ')' : '') + ': recarga la página en el Quest'; ver.dataset.warn = '1'; }
+  }
 }
 
 document.querySelectorAll('.rb-pill').forEach((b) => {

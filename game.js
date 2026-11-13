@@ -80,6 +80,7 @@ function broadcastMetrics() {
     uid: S.rec ? S.rec.uid : '',
     comfortReach: S.reach || null,
     measures: S.measures || {},
+    version: APP_VERSION,
   });
 }
 
@@ -2722,4 +2723,5 @@ function loop() {
 
 initForm();
 
+export const APP_VERSION = '0.9.3';
 export const __test = { S, update, onButton, phaseModel, enterVR, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; } };

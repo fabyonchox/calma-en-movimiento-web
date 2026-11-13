@@ -380,6 +380,8 @@
   .rb-state { font-size: 0.95rem; font-weight: 700; padding: 5px 12px; border-radius: 999px; background: var(--card-subtle); color: var(--muted); border: 1px solid var(--line); transition: background 200ms ease, color 200ms ease; }
   .rb-state[data-on="1"] { background: var(--success-light); color: var(--success); border-color: transparent; }
   .rb-state[data-on="-1"] { background: var(--danger-light); color: var(--danger); border-color: transparent; }
+  .rb-ver { font-size: 0.82rem; font-weight: 700; color: var(--muted); }
+  .rb-ver[data-warn="1"] { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 999px; padding: 4px 12px; }
   .rb-pills { display: flex; flex-wrap: wrap; gap: 8px; }
   .rb-custom { flex: 1 0 100%; }
   .rb-custom summary { cursor: pointer; font-size: 0.82rem; font-weight: 700; color: var(--muted); padding: 2px 0; width: max-content; }
@@ -457,6 +459,7 @@
       <span class="rb-code" id="rbCode">Casco 1</span>
       <span class="rb-casco" id="rbCasco">HOSPITAL-1</span>
       <span class="rb-state" id="rbState" data-on="0">Esperando visor… ⏳</span>
+      <span class="rb-ver" id="rbVer" data-warn="0"></span>
     </div>
     <div class="rb-pills" role="group" aria-label="Elegir casco">
       <button type="button" class="rb-pill" data-room="HOSPITAL-1">🎧 Casco 1</button>
@@ -689,7 +692,7 @@
   </main>
 </div>
 
-<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.9.2 · prototipo no validado clínicamente</p>
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.9.3 · prototipo no validado clínicamente</p>
 <script type="module" src="./terapeuta.js"></script>
 <script>
 if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); }); }
