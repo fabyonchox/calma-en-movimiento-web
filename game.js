@@ -5,6 +5,7 @@ import { Sfx } from './sfx.js';
 import {
   DEFAULTS, ZONES, SIZES, MESSAGES, normalizeConfig, mergeConfig, REMOTE_KEYS, effectiveDistances, pickTarget,
   horizontalDistance, distance, formatTime, newRecord, buildCSV, buildSummary, sustainedReach,
+  MEASURE_LABELS, MEASURE_KEY, sustainedPeak, validateMeasure, buildMeasure, describeMeasure,
 } from './logic.js';
 import { VRPanel } from './vrui.js';
 import { Critters } from './critters.js';
@@ -78,6 +79,7 @@ function broadcastMetrics() {
     adverse: S.rec ? S.rec.adverse : null,
     uid: S.rec ? S.rec.uid : '',
     comfortReach: S.reach || null,
+    measures: S.measures || {},
   });
 }
 
@@ -96,7 +98,7 @@ const tmpB = new THREE.Vector3();
 const S = {
   phase: 'idle', // idle settle calib painBefore ready play pause painAfter satisfaction adverse results bye
   cfg: null, rec: null, runRecords: [], committed: false,
-  hasFloor: true, eyeH: 1.2, reach: null, calibHint: '', dist: null,
+  hasFloor: true, eyeH: 1.2, reach: null, measures: {}, calibHint: '', dist: null,
   activeMs: 0, spawned: 0, resolved: 0, hits: 0, pauses: 0, reachSum: 0, maxReach: 0,
   target: null, prevPos: null, age: 0, popT: -1, popDur: 0.3, nextSpawnAt: 0, msgIdx: 0,
   endedEarly: false, endReason: '', settleUntil: 0, byeAt: 0, ended: false, orbOpacity: 0.95,
@@ -1283,7 +1285,7 @@ async function enterVR() {
     try { localStorage.setItem(CFG_KEY, JSON.stringify({ ...cfg, code: '' })); } catch (e) { /* ok */ }
     S.cfg = cfg;
     S.runRecords = [];
-    S.reach = null;
+    S.reach = null; S.measures = {};
     initThree();
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     if (audioCtx.state === 'suspended') await audioCtx.resume();
@@ -1348,6 +1350,7 @@ function commitRecord() {
   r.avgReach = S.hits ? S.reachSum / S.hits : 0;
   r.maxReach = S.maxReach;
   r.comfortReach = S.reach;
+  r.measures = JSON.parse(JSON.stringify(S.measures || {}));
   r.pauses = S.pauses;
   r.endedEarly = S.endedEarly;
   r.endReason = S.endReason;
@@ -1611,34 +1614,35 @@ function phaseModel() {
   switch (S.phase) {
     case 'settle':
       return { panel: 'menu', model: { title: 'Un momento', lines: ['Siéntate cómodo/a y mira al frente.'] } };
-    case 'calib':
+    case 'calib': {
+      // Mediciones de alcance (todas opcionales). Se piden desde la pantalla del terapeuta y quedan en la sesión y el perfil.
+      const mm = S.measures || {};
+      const tick = (t) => (mm[t] ? ' ✔' : '');
+      const done = Object.keys(mm).map((t) => '✔ ' + MEASURE_LABELS[t] + ': ' + describeMeasure(t, mm[t]));
       return {
         panel: 'menu',
-        model: cfg.limitReach
-          ? {
-            badge: getModeBadge(),
-            title: 'Calibración de Alcance Confortable',
-            lines: [
-              'Mira al frente y mantén una postura relajada.',
-              usingHands()
-                ? 'Pide que extienda el brazo hasta donde sea cómodo y sin dolor y lo mantenga; luego pulsa «Registrar alcance» (se toma el máximo de los últimos 4 s).'
-                : 'Pide que extienda el brazo hasta donde sea cómodo y sin dolor y lo mantenga; luego pulsa «Registrar alcance» (se toma el máximo de los últimos 4 s).',
-              eyeLine(),
-              reachLine(),
-              S.calibHint,
-            ].filter(Boolean),
-            lineSize: 30,
-            buttons: [{ id: 'reach', label: 'Registrar alcance' }, { id: 'cont', label: 'Omitir', secondary: true }],
-            cols: 2,
-          }
-          : {
-            badge: getModeBadge(),
-            title: 'Calibración',
-            lines: ['Mira al frente y mantén una postura cómoda.', eyeLine()],
-            buttons: [{ id: 'cont', label: 'Continuar' }],
-            cols: 1,
-          },
+        model: {
+          badge: getModeBadge(),
+          title: 'Calibración de Alcance',
+          lines: [
+            'Mira al frente y mantén una postura relajada.',
+            'Pide que lleve el brazo hasta donde sea cómodo y sin dolor y lo mantenga; luego pulsa el movimiento que mides (se toma el máximo sostenido de los últimos 4 s). Todos son opcionales.',
+            eyeLine(),
+            reachLine(),
+            ...done,
+            S.calibHint,
+          ].filter(Boolean),
+          lineSize: 30,
+          buttons: [
+            { id: 'reach', label: MEASURE_LABELS.frontal + tick('frontal') },
+            { id: 'reachM:flexion', label: MEASURE_LABELS.flexion + tick('flexion'), secondary: true },
+            { id: 'reachM:abduccion', label: MEASURE_LABELS.abduccion + tick('abduccion'), secondary: true },
+            { id: 'cont', label: mm.frontal ? 'Continuar →' : 'Omitir medición', secondary: !mm.frontal },
+          ],
+          cols: 2,
+        },
       };
+    }
     case 'painBefore':
       return { panel: 'menu', model: { title: '¿Cuánto dolor o molestia tienes en este momento?', lines: ['0 = Sin ningún dolor        10 = Máximo dolor imaginable'], buttons: painButtons('painB', 0, 10), cols: 6 } };
     case 'ready': {
@@ -1868,7 +1872,7 @@ function startAnotherSession(recalibrate) {
   S.ended = false;
   if (recalibrate) {
     // Paciente nuevo: se vuelve a medir el alcance cómodo.
-    S.reach = null;
+    S.reach = null; S.measures = {};
     S.phase = 'calib';
   } else {
     S.phase = 'painBefore';
@@ -1888,7 +1892,8 @@ function onButton(id, c, isRemote = false) {
 
   const [k, v] = id.split(':');
   switch (k) {
-    case 'reach': measureReach(c); break;
+    case 'reach': measureType('frontal', c); break;
+    case 'reachM': measureType(v, c); break;
     case 'cont': S.phase = 'painBefore'; break;
     case 'painB': if (S.rec) S.rec.painBefore = Number(v); S.phase = 'ready'; break;
     case 'start': startPlay(); break;
@@ -1913,7 +1918,7 @@ function onButton(id, c, isRemote = false) {
       break;
     case 'recalib':
       // Desde "listo para comenzar": volver a medir el alcance (no borra datos, la sesión aún no empieza).
-      if (S.phase === 'ready') { S.reach = null; S.phase = 'calib'; }
+      if (S.phase === 'ready') { S.reach = null; S.measures = {}; S.phase = 'calib'; }
       break;
     case 'new_session_calib':
       startAnotherSession(true);
@@ -2015,25 +2020,41 @@ function currentReach() {
   return r;
 }
 
-// Durante la calibración se recuerda el alcance de los últimos segundos. Así, aunque el terapeuta pulse
-// «Registrar alcance» desde su pantalla un momento después de que el paciente estire el brazo, se toma el máximo real.
+// Durante la calibración se recuerda lo que la mano hizo en los últimos segundos. Así, aunque el terapeuta pulse el
+// movimiento desde su pantalla un momento después de que el paciente lo haga, se toma el máximo real y MANTENIDO.
 const REACH_WINDOW_MS = 4000;
-const MIN_VALID_REACH = 0.35; // por debajo, la mano está en reposo (los objetivos quedarían en la cara)
-let reachSamples = [];
+const REACH_HOLD_MS = 500; // un salto de un instante del seguimiento de manos no cuenta como alcance
+let reachSamples = new Map(); // mano (lado) -> muestras: así nunca se mezclan la derecha y la izquierda
 let lastCalibBroadcast = 0;
+
 function sampleReach(now) {
-  const r = currentReach();
-  // Lecturas imposibles para un brazo (más de 1,30 m desde la cabeza) son errores del seguimiento: se descartan.
-  if (r !== null && r <= 1.3) reachSamples.push({ t: now, r });
-  while (reachSamples.length && now - reachSamples[0].t > REACH_WINDOW_MS) reachSamples.shift();
-  return r;
+  const head = headLocal();
+  handCtrls().filter(ctrlActive).forEach((c, i) => {
+    const p = handLocal(c);
+    const r = horizontalDistance(p, head);
+    const d3 = distance(p, head);
+    // Lecturas imposibles para un brazo (más de 1,30 m hacia adelante o 1,6 m en 3D) son errores del seguimiento.
+    if (r > 1.3 || d3 > 1.6) return;
+    const key = ctrlSide(c) || ('h' + i);
+    let arr = reachSamples.get(key);
+    if (!arr) { arr = []; reachSamples.set(key, arr); }
+    arr.push({ t: now, r, y: p.y, lat: Math.abs(p.x - head.x), d3 });
+    while (arr.length && now - arr[0].t > REACH_WINDOW_MS) arr.shift();
+  });
 }
-// Alcance que el paciente MANTUVO (al menos medio segundo) en los últimos 4 s. No se usa el pico de un instante:
-// un salto del seguimiento de manos podía registrar un alcance falso (por ejemplo 1,30 m) y dejar objetivos lejos.
-const REACH_HOLD_MS = 500;
-function recentMaxReach() {
-  return sustainedReach(reachSamples, REACH_HOLD_MS);
+
+// Mejor valor SOSTENIDO de un movimiento entre las manos de trabajo: { value, sample, side }.
+function bestMeasure(type) {
+  const key = MEASURE_KEY[type];
+  let best = { value: 0, sample: null, side: '' };
+  for (const [side, arr] of reachSamples) {
+    const pk = sustainedPeak(arr, key, REACH_HOLD_MS);
+    if (pk.sample && pk.value > best.value) best = { value: pk.value, sample: pk.sample, side };
+  }
+  return best;
 }
+function recentMaxReach() { return bestMeasure('frontal').value; }
+
 let reachLineCache = ''; let reachLineAt = 0;
 function reachLine() {
   const t = performance.now();
@@ -2043,37 +2064,63 @@ function reachLine() {
   return reachLineCache;
 }
 function reachLineRaw() {
-  const cur = currentReach();
-  if (cur === null && !reachSamples.length) return 'No se detectan las manos del paciente.';
-  const f = (v) => v.toFixed(2).replace('.', ',') + ' m';
-  return 'Alcance ahora: ' + (cur === null ? '—' : f(cur)) + ' · mantenido (½ s) en los últimos 4 s: ' + f(recentMaxReach()) + ' (mínimo ' + f(MIN_VALID_REACH) + ')';
+  let last = null;
+  for (const arr of reachSamples.values()) {
+    const s = arr[arr.length - 1];
+    if (s && (!last || s.t > last.t)) last = s;
+  }
+  if (!last) return 'No se detectan las manos del paciente.';
+  const f = (v) => v.toFixed(2).replace('.', ',');
+  const hold = (type) => f(bestMeasure(type).value);
+  return 'Mano ahora: adelante ' + f(last.r) + ' m · altura ' + f(last.y) + ' m · lateral ' + f(last.lat) +
+    ' m. Mantenido ½ s (últimos 4 s): adelante ' + hold('frontal') + ' · altura ' + hold('flexion') + ' · lateral ' + hold('abduccion') + ' m';
 }
 
-function measureReach(c) {
-  // Se mide la mano del lado de trabajo (con "Bilateral", la que llegue más lejos), no la que pulsó el botón:
-  // así también funciona cuando el evaluador pulsa "Registrar alcance" desde la tablet.
-  // Alcance mantenido; si aún no hay medio segundo de datos (recién empieza la calibración), la lectura actual.
-  let r = recentMaxReach() || currentReach() || 0;
-  if (r === 0) {
+// Registra una medición de alcance: 'frontal' (elevación a 90°), 'flexion' (flexión máxima de hombro) o 'abduccion'.
+// Se mide la mano de trabajo (con «Bilateral», la que más llegue), no la que pulsó el botón: así también funciona
+// cuando el evaluador lo pulsa desde su pantalla. Solo la elevación frontal define el alcance cómodo que limita el juego.
+function measureType(type, c) {
+  if (!MEASURE_KEY[type]) return;
+  const best = bestMeasure(type);
+  let sample = best.sample;
+  let side = best.side;
+  if (!sample) { // aún no hay ½ s de datos: se usa la lectura más reciente
+    let latest = null;
+    for (const [k, arr] of reachSamples) {
+      const s = arr[arr.length - 1];
+      if (s && (!latest || s[MEASURE_KEY[type]] > latest.s[MEASURE_KEY[type]])) latest = { s, k };
+    }
+    if (latest) { sample = latest.s; side = latest.k; }
+  }
+  if (!sample) { // último recurso: la mano que pulsó el botón
     const ctrl = c && controllers.find((x) => x.obj === c);
     if (ctrl && ctrlActive(ctrl)) {
-      r = horizontalDistance(handLocal(ctrl), headLocal());
+      const head = headLocal();
+      const p = handLocal(ctrl);
+      sample = { t: 0, r: horizontalDistance(p, head), y: p.y, lat: Math.abs(p.x - head.x), d3: distance(p, head) };
+      side = ctrlSide(ctrl) || '';
     } else {
       S.calibHint = 'No se detecta la mano de trabajo. Acércala para que el visor la vea e inténtalo de nuevo.';
       broadcastState();
       return;
     }
   }
-  if (r < MIN_VALID_REACH) {
-    S.calibHint = 'Alcance muy corto (' + r.toFixed(2).replace('.', ',') + ' m): pide que extienda el brazo un poco más, solo si es cómodo, y vuelve a registrar.';
+  const warn = validateMeasure(type, sample, S.eyeH);
+  if (warn) {
+    S.calibHint = warn;
     broadcastState();
     return;
   }
-  S.reach = Math.min(1.3, r);
-  if (critters) critters.refreshHeight(); // la mesita se acomoda al alcance recién medido
-  S.calibHint = '';
-  if (isFair()) layoutFair();
-  S.phase = 'painBefore';
+  if (!S.measures) S.measures = {};
+  S.measures[type] = buildMeasure(type, sample, S.eyeH, side === 'left' || side === 'right' ? side : '');
+  S.calibHint = '✔ ' + MEASURE_LABELS[type] + ' registrada.';
+  if (type === 'frontal') {
+    S.reach = Math.min(1.3, sample.r);
+    if (critters) critters.refreshHeight(); // la mesita se acomoda al alcance recién medido
+    if (isFair()) layoutFair();
+  }
+  broadcastState();
+  broadcastMetrics();
 }
 
 /* ================= Lógica de Juego ================= */
@@ -2363,8 +2410,8 @@ function update(dt, now) {
     sampleReach(now);
     // El terapeuta ve el alcance en vivo: se reenvía la tarjeta unas 2 veces por segundo mientras se calibra.
     if (now - lastCalibBroadcast > 500) { lastCalibBroadcast = now; broadcastState(); }
-  } else if (reachSamples.length) {
-    reachSamples = [];
+  } else if (reachSamples.size) {
+    reachSamples = new Map();
   }
 
   const pm = phaseModel();

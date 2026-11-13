@@ -1,8 +1,8 @@
 import { getSyncServerUrl, getSessionCode } from './sync-config.js';
-import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent } from './logic.js';
+import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure } from './logic.js';
 import { PatientsPanel } from './pacientes.js';
 
-const APP_VERSION = '0.8.0';
+const APP_VERSION = '0.9.0';
 
 let ws = null;
 let currentRoom = getSessionCode() || 'HOSPITAL-1';
@@ -29,6 +29,7 @@ function freshMetrics() {
     config: null,
     uid: '',
     comfortReach: null,
+    measures: null,
   };
 }
 let currentMetrics = freshMetrics();
@@ -543,6 +544,13 @@ function activeConfig() {
   return currentMetrics.config || readConfigFromForm();
 }
 
+// Mediciones de alcance por movimiento (calibración): una línea cada una.
+function measureLines(m) {
+  const mm = m && m.measures;
+  if (!mm) return [];
+  return Object.keys(MEASURE_LABELS).filter((k) => mm[k]).map((k) => `Alcance ${MEASURE_LABELS[k]}: ${describeMeasure(k, mm[k])}`);
+}
+
 function updateSummaryText() {
   const m = currentMetrics;
   const c = activeConfig();
@@ -559,6 +567,7 @@ function updateSummaryText() {
     `Objetivos: ${m.hits} alcanzados de ${m.spawned} presentados (meta: ${reps} repeticiones)`,
     `Tiempo activo: ${formatTime(m.activeSec || 0)} (programado: ${c.minutes} min)`,
     `Alcance máximo: ${(m.maxReach || 0).toFixed(2)} m (promedio: ${(m.avgReach || 0).toFixed(2)} m)`,
+    ...measureLines(m),
     `Dolor EVN inicial: ${isNum(m.painBefore) ? m.painBefore : 'no registrado'} / 10 | Final: ${isNum(m.painAfter) ? m.painAfter : 'no registrado'} / 10${deltaStr}`,
     `Satisfacción (1-5): ${isNum(m.satisfaction) ? m.satisfaction : 'no registrada'}`,
     `Pausas durante la sesión: ${m.pauses || 0}`,
@@ -729,7 +738,7 @@ function sessionId() {
 // ¿Hay algo que guardar? (aciertos, tiempo o dolor final registrado)
 function sessionHasData() {
   const m = currentMetrics;
-  return (m.hits || 0) > 0 || (m.activeSec || 0) > 5 || isNum(m.painAfter);
+  return (m.hits || 0) > 0 || (m.activeSec || 0) > 5 || isNum(m.painAfter) || !!(m.measures && Object.keys(m.measures).length);
 }
 
 // Sesión terminada y con datos finales (el visor ya pasó por las preguntas finales).
@@ -755,6 +764,7 @@ function buildSessionRecord(manual = false) {
     tiempo_activo_s: m.activeSec || 0,
     alcance_max_m: m.hits ? m.maxReach : '',
     alcance_comodo_m: isNum(m.comfortReach) ? m.comfortReach : '',
+    alcances: m.measures && Object.keys(m.measures).length ? m.measures : null,
     dolor_pre: isNum(m.painBefore) ? m.painBefore : '',
     dolor_post: isNum(m.painAfter) ? m.painAfter : '',
     satisfaccion: isNum(m.satisfaction) ? m.satisfaction : '',

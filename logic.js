@@ -133,6 +133,82 @@ export function sustainedReach(samples, holdMs = 500, toleranceMs = 60) {
   return best;
 }
 
+/* ---------- Alcance por tipo de movimiento ---------- */
+
+export const MEASURE_LABELS = {
+  frontal: 'Elevación frontal 90°',
+  flexion: 'Flexión máxima de hombro',
+  abduccion: 'Abducción',
+};
+// Cada movimiento se mide con una magnitud distinta de la muestra: adelante (r), altura de la mano (y) o lateral (lat).
+export const MEASURE_KEY = { frontal: 'r', flexion: 'y', abduccion: 'lat' };
+export const MIN_FRONTAL = 0.35; // m: por debajo la mano está en reposo
+export const MIN_ABOVE_SHOULDER = 0.1; // m: en flexión máxima la mano debe estar al menos así sobre el hombro
+export const MIN_LATERAL = 0.3; // m
+const SHOULDER_BELOW_EYES = 0.25; // el hombro se estima 25 cm bajo los ojos
+
+// Pico SOSTENIDO de una magnitud (key): el mayor valor que se mantuvo al menos holdMs seguidos.
+// Igual que sustainedReach pero devuelve también la muestra que lo produjo, para registrar altura, lateral y distancia 3D
+// de ese mismo instante. samples: [{t (ms), r, y, lat, ...}] en orden de tiempo.
+export function sustainedPeak(samples, key = 'r', holdMs = 500, toleranceMs = 60) {
+  let best = { value: 0, sample: null };
+  let j = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const tEnd = samples[i].t;
+    while (j < i && samples[j].t < tEnd - holdMs) j++;
+    const startIdx = j > 0 ? j - 1 : j;
+    if (tEnd - samples[startIdx].t < holdMs - toleranceMs) continue;
+    let m = Infinity;
+    let at = samples[i];
+    for (let k = startIdx; k <= i; k++) { if (samples[k][key] < m) { m = samples[k][key]; at = samples[k]; } }
+    if (m > best.value) best = { value: m, sample: at };
+  }
+  return best;
+}
+
+// ¿La medición es válida para ese movimiento? Devuelve un aviso (texto) o '' si está bien.
+export function validateMeasure(type, s, eyeH) {
+  const f = (v) => v.toFixed(2).replace('.', ',') + ' m';
+  if (type === 'frontal' && s.r < MIN_FRONTAL) {
+    return 'Alcance muy corto (' + f(s.r) + '): pide que extienda el brazo hacia adelante un poco más, solo si es cómodo.';
+  }
+  if (type === 'flexion' && s.y < eyeH - SHOULDER_BELOW_EYES + MIN_ABOVE_SHOULDER) {
+    return 'La mano no está sobre el hombro (altura ' + f(s.y) + '): pide que suba el brazo hacia arriba, solo si es cómodo.';
+  }
+  if (type === 'abduccion' && s.lat < MIN_LATERAL) {
+    return 'Apertura lateral muy corta (' + f(s.lat) + '): pide que abra el brazo hacia el costado un poco más, solo si es cómodo.';
+  }
+  return '';
+}
+
+// Ángulo ESTIMADO del brazo (0° = colgando, 90° = horizontal, 180° = vertical sobre la cabeza). Se calcula con la
+// posición de la mano y un hombro estimado a partir de la altura de ojos: es una aproximación, no reemplaza la goniometría.
+export function estimateArmAngle(type, s, eyeH) {
+  const shoulderY = eyeH - SHOULDER_BELOW_EYES;
+  const out = type === 'abduccion' ? s.lat : s.r;
+  const deg = 90 + (Math.atan2(s.y - shoulderY, Math.max(out, 0.001)) * 180) / Math.PI;
+  return Math.round(Math.max(0, Math.min(180, deg)));
+}
+
+const r3 = (v) => Math.round(v * 1000) / 1000;
+// Registro de una medición (metros con 3 decimales).
+export function buildMeasure(type, s, eyeH, side = '') {
+  return {
+    side: side || '',
+    horiz: r3(s.r), lat: r3(s.lat), alt: r3(s.y), d3: r3(s.d3),
+    ang: estimateArmAngle(type, s, eyeH),
+    eyeH: r3(eyeH),
+  };
+}
+
+// Texto corto de una medición para resúmenes y listas.
+export function describeMeasure(type, m) {
+  if (!m) return '';
+  const f = (v) => (typeof v === 'number' ? v.toFixed(2).replace('.', ',') : '–');
+  const base = type === 'flexion' ? 'altura ' + f(m.alt) + ' m' : type === 'abduccion' ? f(m.lat) + ' m lateral' : f(m.horiz) + ' m adelante';
+  return base + ' · ≈' + m.ang + '° (estimado)' + (m.side ? ' · mano ' + (m.side === 'left' ? 'izquierda' : m.side === 'right' ? 'derecha' : m.side) : '');
+}
+
 export function effectiveDistances(cfg, reach) {
   let maxD = cfg.maxD;
   let minD = cfg.minD;

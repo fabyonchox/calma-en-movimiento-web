@@ -4,6 +4,7 @@
 // - Nada de esto se guarda en el navegador (ni localStorage ni caché): la lista de pacientes vive solo en memoria.
 // - Todo el texto que viene de la planilla se pinta con textContent (nunca innerHTML).
 import { PACIENTES_API_URL, GOOGLE_CLIENT_ID, CONSENT_VERSION, CONSENT_TEXT } from './pacientes-config.js';
+import { MEASURE_LABELS } from './logic.js';
 
 /* ---------------- Utilidades ---------------- */
 
@@ -44,6 +45,17 @@ function decodeJwt(token) {
 
 // Solo se recuerda el NOMBRE de quien atiende en esa tablet (no es dato de pacientes).
 const PROF_KEY = 'calma_profesional';
+
+// Alcances por movimiento de una sesión, en una línea: «Frontal 0,62 m · Flex. 1,60 m (≈163°)».
+function resumenMedidas(a) {
+  if (!a || typeof a !== 'object') return '–';
+  const f = (v) => (typeof v === 'number' ? v.toFixed(2).replace('.', ',') : '–');
+  const parts = [];
+  if (a.frontal) parts.push('Frontal ' + f(a.frontal.horiz) + ' m');
+  if (a.flexion) parts.push('Flexión ' + f(a.flexion.alt) + ' m (≈' + a.flexion.ang + '°)');
+  if (a.abduccion) parts.push('Abducción ' + f(a.abduccion.lat) + ' m');
+  return parts.length ? parts.join(' · ') : '–';
+}
 
 const fmtFecha = (iso) => {
   const d = new Date(iso);
@@ -310,7 +322,7 @@ export class PatientsPanel {
     if (!this.sessions) { d.append(el('p', { class: 'pc-muted', text: 'Cargando…' })); return d; }
     if (!this.sessions.length) { d.append(el('p', { class: 'pc-muted', text: 'Todavía no hay sesiones guardadas para este paciente.' })); return d; }
     const t = el('table', { class: 'pc-table' });
-    t.append(el('thead', null, el('tr', null, ...['Fecha', 'Zona', 'Aciertos', 'Alcance máx.', 'Dolor ini→fin', 'Satisf.'].map((h) => el('th', { text: h })))));
+    t.append(el('thead', null, el('tr', null, ...['Fecha', 'Zona', 'Aciertos', 'Alcance máx.', 'Medidas de alcance', 'Dolor ini→fin', 'Satisf.'].map((h) => el('th', { text: h })))));
     const tb = el('tbody');
     for (const s of [...this.sessions].reverse()) {
       tb.append(el('tr', null,
@@ -318,6 +330,7 @@ export class PatientsPanel {
         el('td', { text: String(s.zona || '–') }),
         el('td', { text: (s.aciertos === '' ? '–' : s.aciertos) + (s.meta !== '' ? ' / ' + s.meta : '') }),
         el('td', { text: num(s.alcance_max_m) + (s.alcance_max_m === '' ? '' : ' m') }),
+        el('td', { text: resumenMedidas(s.alcances) }),
         el('td', { text: (s.dolor_pre === '' ? '–' : s.dolor_pre) + ' → ' + (s.dolor_post === '' ? '–' : s.dolor_post) }),
         el('td', { text: s.satisfaccion === '' ? '–' : s.satisfaccion })));
     }
