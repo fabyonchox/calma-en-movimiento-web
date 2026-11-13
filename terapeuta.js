@@ -2,7 +2,7 @@ import { getSyncServerUrl, getSessionCode } from './sync-config.js';
 import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure } from './logic.js';
 import { PatientsPanel } from './pacientes.js';
 
-const APP_VERSION = '0.9.0';
+const APP_VERSION = '0.9.1';
 
 let ws = null;
 let currentRoom = getSessionCode() || 'HOSPITAL-1';
@@ -504,10 +504,6 @@ function renderMetrics(m) {
   $('chipTime').textContent = formatTime(cm.activeSec || 0) + limit;
   $('chipMaxReach').textContent = `${(cm.maxReach || 0).toFixed(2)} m`;
 
-  const pb = cm.painBefore;
-  const pa = cm.painAfter;
-  $('valPainBefore').textContent = isNum(pb) ? pb : '-';
-  $('valPainAfter').textContent = isNum(pa) ? pa : '-';
   $('valSatisfaction').textContent = isNum(cm.satisfaction) ? cm.satisfaction + ' / 5' : '-';
   $('valPauses').textContent = cm.pauses || 0;
   if ($('valAttempts')) $('valAttempts').textContent = `${cm.spawned || 0} / ${cm.resolved || 0}`;
@@ -520,14 +516,7 @@ function renderMetrics(m) {
     $('valEndReason').textContent = cm.endReason ? (END_REASONS[cm.endReason] || cm.endReason) : '-';
   }
 
-  if (isNum(pb) && isNum(pa)) {
-    const delta = pa - pb;
-    const sign = delta > 0 ? '+' : '';
-    $('chipPainDelta').textContent = `${sign}${delta} EVN`;
-    $('chipPainDelta').style.color = delta <= 0 ? 'var(--success)' : 'var(--danger)';
-  } else {
-    $('chipPainDelta').textContent = '-';
-  }
+  $('chipSatisfaction').textContent = isNum(cm.satisfaction) ? cm.satisfaction + ' / 5' : '-';
 
   // Primera vez que llega la configuración real del visor: el formulario parte con lo que de verdad está activo.
   if (cm.config && !formFilled) fillForm(cm.config);
@@ -555,8 +544,6 @@ function updateSummaryText() {
   const m = currentMetrics;
   const c = activeConfig();
   const notes = $('therapistNotes').value.trim();
-  const hasDelta = isNum(m.painBefore) && isNum(m.painAfter);
-  const deltaStr = hasDelta ? ` (Δ: ${m.painAfter - m.painBefore})` : '';
   const reps = isNum(m.reps) && m.reps > 0 ? m.reps : DEFAULTS.reps;
 
   const summary = [
@@ -568,7 +555,6 @@ function updateSummaryText() {
     `Tiempo activo: ${formatTime(m.activeSec || 0)} (programado: ${c.minutes} min)`,
     `Alcance máximo: ${(m.maxReach || 0).toFixed(2)} m (promedio: ${(m.avgReach || 0).toFixed(2)} m)`,
     ...measureLines(m),
-    `Dolor EVN inicial: ${isNum(m.painBefore) ? m.painBefore : 'no registrado'} / 10 | Final: ${isNum(m.painAfter) ? m.painAfter : 'no registrado'} / 10${deltaStr}`,
     `Satisfacción (1-5): ${isNum(m.satisfaction) ? m.satisfaction : 'no registrada'}`,
     `Pausas durante la sesión: ${m.pauses || 0}`,
     m.endReason ? `Cómo terminó: ${END_REASONS[m.endReason] || m.endReason}` : '',
@@ -707,10 +693,10 @@ $('downloadCsvBtn').onclick = () => {
   const c = activeConfig();
   const now = new Date();
   const dateStr = now.toISOString().split('T')[0];
-  const header = ['Fecha', 'Sala', 'Zona', 'Lado', 'Aciertos', 'MetaRepeticiones', 'TiempoActivo', 'AlcanceMax', 'DolorPre', 'DolorPost', 'Satisfaccion', 'Pausas', 'MotivoFin'];
+  const header = ['Fecha', 'Sala', 'Zona', 'Lado', 'Aciertos', 'MetaRepeticiones', 'TiempoActivo', 'AlcanceMax', 'Satisfaccion', 'Pausas', 'MotivoFin'];
   const row = [
     dateStr, currentRoom, c.zone, SIDE_ES[c.side] || c.side, m.hits, m.reps, csvCell(m.activeSec || 0, 1), m.hits ? csvCell(m.maxReach, 2) : '',
-    m.painBefore, m.painAfter, m.satisfaction, m.pauses, END_REASONS[m.endReason] || '',
+    m.satisfaction, m.pauses, END_REASONS[m.endReason] || '',
   ].map((v) => csvCell(v));
   const csv = '﻿' + header.join(';') + '\r\n' + row.join(';') + '\r\n';
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -738,7 +724,7 @@ function sessionId() {
 // ¿Hay algo que guardar? (aciertos, tiempo o dolor final registrado)
 function sessionHasData() {
   const m = currentMetrics;
-  return (m.hits || 0) > 0 || (m.activeSec || 0) > 5 || isNum(m.painAfter) || !!(m.measures && Object.keys(m.measures).length);
+  return (m.hits || 0) > 0 || (m.activeSec || 0) > 5 || isNum(m.satisfaction) || !!(m.measures && Object.keys(m.measures).length);
 }
 
 // Sesión terminada y con datos finales (el visor ya pasó por las preguntas finales).
@@ -765,8 +751,6 @@ function buildSessionRecord(manual = false) {
     alcance_max_m: m.hits ? m.maxReach : '',
     alcance_comodo_m: isNum(m.comfortReach) ? m.comfortReach : '',
     alcances: m.measures && Object.keys(m.measures).length ? m.measures : null,
-    dolor_pre: isNum(m.painBefore) ? m.painBefore : '',
-    dolor_post: isNum(m.painAfter) ? m.painAfter : '',
     satisfaccion: isNum(m.satisfaction) ? m.satisfaction : '',
     pausas: m.pauses || 0,
     motivo_fin: END_REASONS[m.endReason] || '',
@@ -797,9 +781,10 @@ const patientsPanel = new PatientsPanel($('patientCard'), {
 function updateRoomBanner() {
   const code = $('rbCode');
   if (!code) return;
-  code.textContent = currentRoom;
   const m = /^HOSPITAL-(\d+)$/.exec(currentRoom);
-  $('rbCasco').textContent = m ? '· Casco ' + m[1] : '';
+  // Casco conocido: título «Casco N» y el código de sala pequeño al lado. Sala personalizada: se muestra el código.
+  code.textContent = m ? 'Casco ' + m[1] : currentRoom;
+  $('rbCasco').textContent = m ? currentRoom : 'Sala personalizada';
   const st = $('rbState');
   if (!isConnected) { st.textContent = 'Sin conexión con el servidor'; st.dataset.on = '-1'; }
   else if (isHeadsetOnline) { st.textContent = 'Visor conectado 🟢'; st.dataset.on = '1'; }

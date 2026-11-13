@@ -311,7 +311,7 @@ export class PatientsPanel {
 
       r.append(this.historyView());
     } else {
-      r.append(el('p', { class: 'pc-muted', text: 'Elige un paciente para que cada sesión quede guardada en su perfil (dolor inicial y final, alcance, aciertos).' }));
+      r.append(el('p', { class: 'pc-muted', text: 'Elige un paciente para que cada sesión quede guardada en su perfil (satisfacción, alcance, aciertos).' }));
     }
     r.append(el('div', { class: 'pc-status', 'data-status': '', 'data-kind': this.statusKind, text: this.status }));
   }
@@ -322,7 +322,7 @@ export class PatientsPanel {
     if (!this.sessions) { d.append(el('p', { class: 'pc-muted', text: 'Cargando…' })); return d; }
     if (!this.sessions.length) { d.append(el('p', { class: 'pc-muted', text: 'Todavía no hay sesiones guardadas para este paciente.' })); return d; }
     const t = el('table', { class: 'pc-table' });
-    t.append(el('thead', null, el('tr', null, ...['Fecha', 'Zona', 'Aciertos', 'Alcance máx.', 'Medidas de alcance', 'Dolor ini→fin', 'Satisf.'].map((h) => el('th', { text: h })))));
+    t.append(el('thead', null, el('tr', null, ...['Fecha', 'Zona', 'Aciertos', 'Alcance máx.', 'Medidas de alcance', 'Satisf.'].map((h) => el('th', { text: h })))));
     const tb = el('tbody');
     for (const s of [...this.sessions].reverse()) {
       tb.append(el('tr', null,
@@ -331,7 +331,6 @@ export class PatientsPanel {
         el('td', { text: (s.aciertos === '' ? '–' : s.aciertos) + (s.meta !== '' ? ' / ' + s.meta : '') }),
         el('td', { text: num(s.alcance_max_m) + (s.alcance_max_m === '' ? '' : ' m') }),
         el('td', { text: resumenMedidas(s.alcances) }),
-        el('td', { text: (s.dolor_pre === '' ? '–' : s.dolor_pre) + ' → ' + (s.dolor_post === '' ? '–' : s.dolor_post) }),
         el('td', { text: s.satisfaccion === '' ? '–' : s.satisfaccion })));
     }
     t.append(tb);

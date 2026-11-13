@@ -1343,7 +1343,7 @@ function resetCounters() {
 function commitRecord() {
   if (S.committed || !S.rec) return;
   const r = S.rec;
-  if (S.spawned === 0 && r.painBefore === null) return;
+  if (S.spawned === 0 && r.satisfaction === null && !Object.keys(S.measures || {}).length) return;
   r.spawned = S.spawned;
   r.hits = S.hits;
   r.activeSec = S.activeMs / 1000;
@@ -1727,7 +1727,6 @@ function phaseModel() {
           lines: [
             'Objetivos alcanzados: ' + S.hits + ' de ' + S.spawned + '   ·   Tiempo activo: ' + formatTime(S.activeMs / 1000),
             'Alcance promedio: ' + m(avg) + '   ·   máximo: ' + m(S.maxReach),
-            'Dolor antes: ' + (r.painBefore === null ? '-' : r.painBefore) + '   ·   después: ' + (r.painAfter === null ? '-' : r.painAfter),
             r.adverse ? 'Gracias por informarlo. Tu kinesiólogo revisará cómo te sientes.' : 'Gracias por participar. Cada movimiento cuenta.',
           ],
           buttons: [{ id: 'done', label: 'Finalizar' }, { id: 'again', label: 'Repetir sesión', secondary: true }],
@@ -1875,7 +1874,7 @@ function startAnotherSession(recalibrate) {
     S.reach = null; S.measures = {};
     S.phase = 'calib';
   } else {
-    S.phase = 'painBefore';
+    S.phase = 'ready';
   }
 }
 
@@ -1894,7 +1893,7 @@ function onButton(id, c, isRemote = false) {
   switch (k) {
     case 'reach': measureType('frontal', c); break;
     case 'reachM': measureType(v, c); break;
-    case 'cont': S.phase = 'painBefore'; break;
+    case 'cont': S.phase = 'ready'; break;
     case 'painB': if (S.rec) S.rec.painBefore = Number(v); S.phase = 'ready'; break;
     case 'start': startPlay(); break;
     case 'pause': pausePlay(); break;
@@ -2164,7 +2163,7 @@ function guideOnPhase(prev, phase) {
     else { guide.say('comenzar'); S.guideMid = false; S.guideLast = false; }
   } else if (phase === 'pause') {
     guide.sayNow('pausa');
-  } else if (phase === 'painAfter') {
+  } else if (phase === 'satisfaction') {
     guide.clear();
     guide.say(S.endReason === 'reps' ? 'fin_meta' : S.endReason === 'time' ? 'fin_tiempo' : 'fin_otro');
     guide.say('encuesta');
@@ -2216,7 +2215,7 @@ function endPlay(early, reason) {
   S.droppingApple = null;
   S.endedEarly = early;
   S.endReason = reason || (early ? 'user' : '');
-  S.phase = 'painAfter';
+  S.phase = 'satisfaction';
 }
 
 // "Finalizar": según la fase puede ser terminar el juego, saltar la encuesta o cerrar el resumen.

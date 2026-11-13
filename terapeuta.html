@@ -376,11 +376,14 @@
   .rb-main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; min-width: 0; }
   .rb-label { font-size: 0.8rem; font-weight: 800; letter-spacing: 0.12em; color: var(--muted); }
   .rb-code { font-size: clamp(1.6rem, 5vw, 2.4rem); font-weight: 800; line-height: 1.1; color: var(--acc); overflow-wrap: anywhere; }
-  .rb-casco { font-size: 1.05rem; font-weight: 700; color: var(--ink); }
+  .rb-casco { font-size: 0.85rem; font-weight: 700; color: var(--muted); letter-spacing: 0.06em; }
   .rb-state { font-size: 0.95rem; font-weight: 700; padding: 5px 12px; border-radius: 999px; background: var(--card-subtle); color: var(--muted); border: 1px solid var(--line); transition: background 200ms ease, color 200ms ease; }
   .rb-state[data-on="1"] { background: var(--success-light); color: var(--success); border-color: transparent; }
   .rb-state[data-on="-1"] { background: var(--danger-light); color: var(--danger); border-color: transparent; }
   .rb-pills { display: flex; flex-wrap: wrap; gap: 8px; }
+  .rb-custom { flex: 1 0 100%; }
+  .rb-custom summary { cursor: pointer; font-size: 0.82rem; font-weight: 700; color: var(--muted); padding: 2px 0; width: max-content; }
+  .rb-custom[open] summary { margin-bottom: 8px; }
   .rb-pill { font: inherit; font-weight: 700; font-size: 0.95rem; min-height: 44px; padding: 8px 16px; border-radius: 999px; border: 1.5px solid var(--line); background: var(--card-subtle); color: var(--ink); cursor: pointer; transition: background 150ms ease, border-color 150ms ease, transform 150ms ease; }
   .rb-pill:hover { border-color: var(--acc); }
   .rb-pill:active { transform: scale(0.97); }
@@ -441,15 +444,9 @@
         <span id="serverStatusText">Conectando...</span>
       </div>
 
-      <div class="status-badge" id="headsetBadge">
+      <div class="status-badge" id="headsetBadge" style="display:none">
         <span style="font-size:1.1rem;">🥽</span>
         <span id="headsetStatusText">Esperando visor...</span>
-      </div>
-
-      <div class="room-pill">
-        <span>SALA:</span>
-        <input type="text" id="roomCodeInput" class="room-input" maxlength="20" value="HOSPITAL-1" title="Código de sesión compartido">
-        <button id="changeRoomBtn" type="button" style="border:0; background:transparent; cursor:pointer; color:inherit; font-size:1rem;" title="Cambiar Sala">🔄</button>
       </div>
     </div>
   </header>
@@ -457,9 +454,8 @@
   <!-- Sala y casco: bien visible para no confundir tablets ni visores -->
   <section class="room-banner" id="roomBanner" aria-live="polite">
     <div class="rb-main">
-      <span class="rb-label">SALA</span>
-      <span class="rb-code" id="rbCode">HOSPITAL-1</span>
-      <span class="rb-casco" id="rbCasco"></span>
+      <span class="rb-code" id="rbCode">Casco 1</span>
+      <span class="rb-casco" id="rbCasco">HOSPITAL-1</span>
       <span class="rb-state" id="rbState" data-on="0">Esperando visor… ⏳</span>
     </div>
     <div class="rb-pills" role="group" aria-label="Elegir casco">
@@ -467,6 +463,14 @@
       <button type="button" class="rb-pill" data-room="HOSPITAL-2">🎧 Casco 2</button>
       <button type="button" class="rb-pill" data-room="HOSPITAL-3">🎧 Casco 3</button>
     </div>
+    <details class="rb-custom">
+      <summary>Otra sala</summary>
+      <div class="room-pill">
+        <span>SALA:</span>
+        <input type="text" id="roomCodeInput" class="room-input" maxlength="20" value="HOSPITAL-1" title="Código de sesión compartido">
+        <button id="changeRoomBtn" type="button" style="border:0; background:transparent; cursor:pointer; color:inherit; font-size:1rem;" title="Cambiar Sala">🔄</button>
+      </div>
+    </details>
   </section>
 
   <!-- Fallback Offline Banner -->
@@ -650,14 +654,12 @@
             <div class="chip-value" id="chipMaxReach">0.00 m</div>
           </div>
           <div class="chip">
-            <div class="chip-label">⚡ Delta Dolor (EVN)</div>
-            <div class="chip-value" id="chipPainDelta">-</div>
+            <div class="chip-label">😊 Satisfacción</div>
+            <div class="chip-value" id="chipSatisfaction">-</div>
           </div>
         </div>
 
         <div style="background:var(--card-subtle); padding:10px 14px; border-radius:10px; font-size:0.88rem; color:var(--muted); line-height:1.5;">
-          • <b>Dolor inicial (EVN):</b> <span id="valPainBefore" style="font-weight:700; color:var(--ink);">-</span><br>
-          • <b>Dolor final (EVN):</b> <span id="valPainAfter" style="font-weight:700; color:var(--ink);">-</span><br>
           • <b>Satisfacción (1-5):</b> <span id="valSatisfaction" style="font-weight:700; color:var(--ink);">-</span><br>
           • <b>Pausas solicitadas:</b> <span id="valPauses" style="font-weight:700; color:var(--ink);">0</span><br>
           • <b>Objetivos presentados / resueltos:</b> <span id="valAttempts" style="font-weight:700; color:var(--ink);">0 / 0</span><br>
@@ -687,7 +689,7 @@
   </main>
 </div>
 
-<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.9.0 · prototipo no validado clínicamente</p>
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.9.1 · prototipo no validado clínicamente</p>
 <script type="module" src="./terapeuta.js"></script>
 <script>
 if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); }); }
