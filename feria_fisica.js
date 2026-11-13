@@ -39,15 +39,17 @@ export function fairLayout(cfg, dist, eyeH = 1.15) {
   ];
   const farthest = (dz) => Math.max(...offsets.map((o) => hyp(cx + o.x, dz)));
 
-  // Profundidad del mostrador: lo más lejos posible sin pasar el alcance cómodo.
-  // Los tarros van al 92 % del alcance cómodo (no al límite), para no tener que estirarse al máximo.
-  // Si con alcance muy corto no cabe así, se usa hasta el 100 % (el mínimo para que quepan las bandejas).
-  const fitDz = (start) => { let d = start; while (d > 0.05 && farthest(d) > cap) d -= 0.005; return d; };
-  let dz = fitDz(Math.min(cap * 0.92, 0.78));
+  // Profundidad del mostrador, según lo que elige el terapeuta (cfg.fairDist), en proporción al alcance cómodo calibrado:
+  //   near = 92 %   mid = 100 %   far = 115 % (los tarros se LANZAN, no hace falta llegar a ellos con la mano).
+  // Las bandejas y lo que la mano toma siempre quedan dentro del alcance cómodo. Tope absoluto: 0,95 m.
+  const FACTOR = { near: 0.92, mid: 1.0, far: 1.15 }[cfg.fairDist] || 1.0;
+  const limit = Math.min(cap * FACTOR, 0.95);
+  const fitDz = (start, lim = limit) => { let d = start; while (d > 0.05 && farthest(d) > lim) d -= 0.005; return d; };
+  let dz = fitDz(limit);
   // Hay que dejar espacio delante del mostrador para las bandejas.
   // Las bandejas van lo más lejos posible de la cabeza (hasta 0.36 m) sin chocar con el mostrador; mínimo 0.12 m.
   const binZFor = (d) => Math.min(0.36, d - COUNTER.d / 2 - BIN.d / 2 - 0.005); // distancia al centro de la bandeja
-  if (binZFor(dz) < 0.12) dz = fitDz(cap);
+  if (binZFor(dz) < 0.12) dz = fitDz(cap, cap); // alcance muy corto: lo más lejos que permita el alcance
   const binZ = binZFor(dz);
   const ok = binZ >= 0.12;
 

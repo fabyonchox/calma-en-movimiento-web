@@ -2,7 +2,7 @@ import { getSyncServerUrl, getSessionCode } from './sync-config.js';
 import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure } from './logic.js';
 import { PatientsPanel } from './pacientes.js';
 
-const APP_VERSION = '0.9.3';
+const APP_VERSION = '0.9.4';
 
 let ws = null;
 let currentRoom = getSessionCode() || 'HOSPITAL-1';
@@ -60,7 +60,7 @@ const MODE_ES = { apples: 'Cosecha del Manzano', lights: 'Jardín de Luces', fai
 const CFG_FIELDS = {
   gameMode: 'cfgMode', zone: 'cfgZone', side: 'cfgSide', position: 'cfgPos',
   minutes: 'cfgMin', reps: 'cfgReps', dwell: 'cfgDwell', size: 'cfgSize', feedback: 'cfgFeedback',
-  guide: 'cfgGuide', guideProgress: 'cfgGuideProgress',
+  guide: 'cfgGuide', guideProgress: 'cfgGuideProgress', fairDist: 'cfgFairDist',
 };
 
 // Las zonas salen de la misma lista que usa el visor (así lo que se elige aquí es lo que se registra allá).

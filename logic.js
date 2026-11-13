@@ -28,6 +28,7 @@ export const DEFAULTS = {
   limitReach: true,
   guide: 'on', // guía (luz con carita): 'on' | 'off'
   guideProgress: 'off', // ventanita '3 de 10' junto al guía en el visor: 'on' | 'off'
+  fairDist: 'mid', // Feria: distancia de los tarros: 'near' (92 % del alcance) | 'mid' (100 %) | 'far' (115 %)
 };
 
 // Mensajes neutros (Fase 5). Sin lenguaje competitivo ni punitivo.
@@ -58,6 +59,7 @@ export function normalizeConfig(raw = {}) {
   c.limitReach = !!c.limitReach;
   c.guide = c.guide === 'off' || c.guide === false ? 'off' : 'on';
   c.guideProgress = c.guideProgress === 'on' || c.guideProgress === true ? 'on' : 'off';
+  c.fairDist = ['near', 'mid', 'far'].includes(c.fairDist) ? c.fairDist : DEFAULTS.fairDist;
 
   c.minH = clamp(num(c.minH, DEFAULTS.minH), 0.3, 2.0);
   c.maxH = clamp(num(c.maxH, DEFAULTS.maxH), 0.4, 2.2);
@@ -74,7 +76,7 @@ export function normalizeConfig(raw = {}) {
 }
 
 // Campos que la tablet del evaluador puede cambiar en el visor. Cualquier otro campo se ignora.
-export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'guide', 'guideProgress'];
+export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'guide', 'guideProgress', 'fairDist'];
 
 // Mezcla la configuración actual del visor con la que manda la tablet y la normaliza.
 export function mergeConfig(current, incoming) {

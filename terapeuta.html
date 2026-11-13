@@ -596,6 +596,14 @@
           </div>
         </div>
         <div style="margin-bottom:12px;">
+          <label for="cfgFairDist">Distancia de los tarros (solo Feria de Juegos)</label>
+          <select id="cfgFairDist">
+            <option value="near">Cerca (92 % del alcance cómodo)</option>
+            <option value="mid" selected>Media (100 % del alcance cómodo)</option>
+            <option value="far">Lejos (115 %: más allá del alcance, se lanza)</option>
+          </select>
+        </div>
+        <div style="margin-bottom:12px;">
           <label for="cfgFeedback">Retroalimentación</label>
           <select id="cfgFeedback">
             <option value="both" selected>Visual y sonora</option>
@@ -692,7 +700,7 @@
   </main>
 </div>
 
-<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.9.3 · prototipo no validado clínicamente</p>
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.9.4 · prototipo no validado clínicamente</p>
 <script type="module" src="./terapeuta.js"></script>
 <script>
 if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); }); }
