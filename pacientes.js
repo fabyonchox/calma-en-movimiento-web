@@ -295,7 +295,7 @@ export class PatientsPanel {
         el('div', { class: 'pc-meta', text: 'Consentimiento informado: ' + (p.consentimiento_ts ? fmtFecha(p.consentimiento_ts) : 'sin registro') })));
 
       r.append(el('button', { type: 'button', class: 'action-btn secondary-btn', id: 'pcSaveSession', text: '💾 Guardar sesión en el perfil',
-        onclick: () => { const s = this.hooks.buildSession && this.hooks.buildSession(); if (!s) { this.setStatus('Aún no hay una sesión terminada para guardar.', 'warn'); return; } this.saveSession(s, this.savedUids.has(s.id)); } }));
+        onclick: () => { const s = this.hooks.buildSession && this.hooks.buildSession(); if (!s) { this.setStatus('Todavía no hay datos de la sesión para guardar (sin aciertos ni tiempo registrados).', 'warn'); return; } this.saveSession(s, this.savedUids.has(s.id)); } }));
 
       r.append(this.historyView());
     } else {

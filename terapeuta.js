@@ -570,6 +570,7 @@ function updateSummaryText() {
 
 // Limpia lo que muestra la tablet (la sesión anterior ya está guardada en el visor).
 function applyLocalReset() {
+  localSessionId = '';
   const keepConfig = currentMetrics.config;
   currentMetrics = freshMetrics();
   if (keepConfig) {
@@ -712,18 +713,34 @@ $('therapistNotes').oninput = updateSummaryText;
 
 /* ---------- Perfil del paciente: guardar la sesión ---------- */
 
+// Identificador de la sesión: el que manda el visor; si el visor es una versión antigua y no lo manda, se genera uno
+// aquí (uno por sesión; se renueva al limpiar la pantalla).
+let localSessionId = '';
+function sessionId() {
+  if (currentMetrics.uid) return currentMetrics.uid;
+  if (!localSessionId) localSessionId = 'T' + Date.now() + '-' + Math.floor(Math.random() * 1e6);
+  return localSessionId;
+}
+
+// ¿Hay algo que guardar? (aciertos, tiempo o dolor final registrado)
+function sessionHasData() {
+  const m = currentMetrics;
+  return (m.hits || 0) > 0 || (m.activeSec || 0) > 5 || isNum(m.painAfter);
+}
+
 // Sesión terminada y con datos finales (el visor ya pasó por las preguntas finales).
 function sessionIsFinal() {
-  return !!currentMetrics.uid && (['results', 'rest', 'bye'].includes(currentPhase) || currentMetrics.sessionEnded);
+  return sessionHasData() && (['results', 'rest', 'bye'].includes(currentPhase) || currentMetrics.sessionEnded);
 }
 
 // Arma el registro de la sesión para la planilla. Solo lo que se midió; lo no registrado queda vacío (nunca 0).
-function buildSessionRecord() {
-  if (!sessionIsFinal()) return null;
+// manual = true: el profesional pulsó «Guardar sesión»; se guarda lo que haya aunque el visor no haya cerrado las preguntas.
+function buildSessionRecord(manual = false) {
+  if (!(manual ? sessionHasData() : sessionIsFinal())) return null;
   const m = currentMetrics;
   const c = activeConfig() || {};
   return {
-    id: m.uid,
+    id: sessionId(),
     fecha_ts: new Date().toISOString(),
     zona: c.zone || '',
     lado: SIDE_ES[c.side] || c.side || '',
@@ -747,7 +764,7 @@ function buildSessionRecord() {
 let autoSaveTimer = null;
 function maybeAutoSaveSession() {
   if (!patientsPanel || !patientsPanel.selected || !patientsPanel.signedIn) return;
-  if (!sessionIsFinal() || patientsPanel.savedUids.has(currentMetrics.uid)) return;
+  if (!sessionIsFinal() || patientsPanel.savedUids.has(sessionId())) return;
   if (autoSaveTimer) return;
   // Se espera un momento: los últimos datos (dolor final, satisfacción) pueden llegar justo después del cambio de fase.
   autoSaveTimer = setTimeout(() => {
@@ -758,7 +775,7 @@ function maybeAutoSaveSession() {
 }
 
 const patientsPanel = new PatientsPanel($('patientCard'), {
-  buildSession: buildSessionRecord,
+  buildSession: () => buildSessionRecord(true),
 });
 
 // Conectar al cargar
