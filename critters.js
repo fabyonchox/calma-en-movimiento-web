@@ -289,14 +289,17 @@ export class Critters {
   }
 
   // Avanza al animal de suelo hacia (tx,tz) esquivando obstáculos. Devuelve la distancia restante al objetivo.
-  steer(a, tx, tz, speed, dt, ignore = null) {
+  // fieldSkip: obstáculos cuyo CAMPO de rechazo no empuja (la restricción dura de no entrar en ellos sí se mantiene).
+  // Se usa en el último tramo hacia el plato: el rechazo del paciente y de las mesas de provisiones cancelaba la atracción
+  // del destino y el animal se quedaba parado a medio camino.
+  steer(a, tx, tz, speed, dt, ignore = null, fieldSkip = null) {
     const dx = tx - a.x; const dz = tz - a.z;
     const d = Math.hypot(dx, dz);
     if (d < 1e-4) return 0;
     const ux = dx / d; const uz = dz / d;
     let rx = 0; let rz = 0;
     for (const o of this.obstacles) {
-      if (o === ignore) continue;
+      if (o === ignore || (fieldSkip && fieldSkip.has(o))) continue;
       const ox = a.x - o.x; const oz = a.z - o.z;
       const od = Math.hypot(ox, oz);
       const lim = o.r + a.pad + 0.35;
@@ -306,6 +309,20 @@ export class Critters {
         const tx2 = -oz / od; const tz2 = ox / od;
         const s = Math.sign(tx2 * ux + tz2 * uz) || 1;
         rx += tx2 * s * k * 0.9; rz += tz2 * s * k * 0.9;
+      }
+    }
+    // Otros animales: se les rodea (no se pasa por encima de ellos).
+    const mates = this.groundMates(a);
+    for (const b of mates) {
+      const ox = a.x - b.x; const oz = a.z - b.z;
+      const od = Math.hypot(ox, oz);
+      const lim = 0.6;
+      if (od < lim && od > 1e-4) {
+        const k = (lim - od) / lim;
+        rx += (ox / od) * k * 1.6; rz += (oz / od) * k * 1.6;
+        const tx2 = -oz / od; const tz2 = ox / od;
+        const s2 = Math.sign(tx2 * ux + tz2 * uz) || 1;
+        rx += tx2 * s2 * k; rz += tz2 * s2 * k;
       }
     }
     let vx = ux + rx * 1.4; let vz = uz + rz * 1.4;
@@ -323,16 +340,47 @@ export class Critters {
         a.x = od > 1e-4 ? o.x + ox * k : o.x + min; a.z = od > 1e-4 ? o.z + oz * k : o.z;
       }
     }
+    // Separación firme: dos animales nunca quedan a menos de 30 cm uno del otro.
+    for (const b of mates) {
+      const ox = a.x - b.x; const oz = a.z - b.z;
+      const od = Math.hypot(ox, oz);
+      const min = 0.3;
+      if (od < min) {
+        const k = od > 1e-4 ? min / od : 1;
+        a.x = od > 1e-4 ? b.x + ox * k : b.x + min; a.z = od > 1e-4 ? b.z + oz * k : b.z;
+      }
+    }
+    // Los obstáculos mandan: si la separación empujó al animal contra uno, se le saca de nuevo.
+    for (const o of this.obstacles) {
+      if (o === ignore) continue;
+      const ox = a.x - o.x; const oz = a.z - o.z;
+      const od = Math.hypot(ox, oz);
+      const min = o.r + a.pad * 0.4;
+      if (od < min && od > 1e-4) { a.x = o.x + (ox / od) * min; a.z = o.z + (oz / od) * min; }
+    }
     a.g.rotation.y = Math.atan2(-vx, -vz);
     a.moved = (a.moved || 0) + step;
     return Math.hypot(tx - a.x, tz - a.z);
+  }
+
+  // Otros animales de suelo presentes (distintos de a). Sirve para que no se amontonen ni se pisen.
+  groundMates(a) {
+    const out = [];
+    for (const b of Object.values(this.animals)) {
+      if (b === a || !b.ground || b.state === 'away') continue;
+      if ((b.y || 0) > 0.3) continue; // subido a la mesa
+      out.push(b);
+    }
+    return out;
   }
 
   pickWander(a) {
     for (let i = 0; i < 40; i++) {
       const ang = rnd(-1.6, 1.6); const r = rnd(1.1, 2.6);
       const x = Math.sin(ang) * r; const z = -Math.cos(ang) * r;
-      if (!this.blocked(x, z, a.pad + 0.3)) return { x, z };
+      if (this.blocked(x, z, a.pad + 0.3)) continue;
+      const crowded = this.groundMates(a).some((b) => Math.hypot(x - b.x, z - b.z) < 1.0 || (b.target && Math.hypot(x - b.target.x, z - b.target.z) < 1.0));
+      if (!crowded) return { x, z };
     }
     return { x: 0.9, z: -1.2 };
   }
@@ -341,7 +389,9 @@ export class Critters {
     for (let i = 0; i < 60; i++) {
       const ang = rnd(-Math.PI, Math.PI); const r = rnd(3.4, 4.2); // 360°: adelante, costados y atrás
       const x = Math.sin(ang) * r; const z = -Math.cos(ang) * r;
-      if (!this.blocked(x, z, a.pad + 0.5)) return { x, z, ang };
+      if (this.blocked(x, z, a.pad + 0.5)) continue;
+      if (this.groundMates(a).some((b) => Math.hypot(x - b.x, z - b.z) < 1.5)) continue;
+      return { x, z, ang };
     }
     return { x: 3.5, z: 1, ang: 1.9 };
   }
@@ -511,9 +561,17 @@ export class Critters {
     return !!(this.plate && this.plate.state === 'plate' && FOOD_FOR[this.plate.kind] === a.kind && !a.feeding);
   }
 
+  // Punto de paso al frente de la mesa (por el lado de la especie), despejado de la mesa de provisiones y del paciente.
+  stagePoint(a) {
+    const t = this.table;
+    const side = a.kind === 'rabbit' ? -1 : a.kind === 'squirrel' ? 1 : (a.x < t.x ? -1 : 1);
+    return { x: side * 0.9, z: t.z - 1.0 };
+  }
+
   approachPoint(a) {
     const t = this.table;
-    const side = a.x < t.x ? -1 : 1;
+    // Cada especie tiene su lado fijo de la mesa (conejo a la izquierda, ardilla a la derecha), así nunca llegan al mismo punto.
+    const side = a.kind === 'rabbit' ? -1 : a.kind === 'squirrel' ? 1 : (a.x < t.x ? -1 : 1);
     return { x: t.x + side * 0.38, z: t.z - 0.22, side };
   }
 
@@ -541,9 +599,14 @@ export class Critters {
       }
       case 'toFeed': {
         const ap = a.ap;
-        const left = this.steer(a, ap.x, ap.z, a.speed * 1.3, dt, this.tableObs);
+        // Primero el punto de paso al frente de la mesa; después, su lugar junto al plato.
+        const wp = a.route && a.route.length ? a.route[0] : ap;
+        const finalLeg = !(a.route && a.route.length);
+        // En el último tramo no empujan los campos de rechazo de lo que rodea a la mesa (paciente y mesas de provisiones).
+        const skip = finalLeg ? new Set(this.obstacles.filter((o) => Math.hypot(o.x - this.table.x, o.z - this.table.z) < 1.0)) : null;
+        const left = this.steer(a, wp.x, wp.z, a.speed * 1.3, dt, finalLeg ? this.tableObs : null, skip);
         moving = true;
-        if (left < 0.08 || a.t > 14) { a.state = 'jumpUp'; a.t = 0; a.from = { x: a.x, z: a.z }; }
+        if (a.route && a.route.length) { if (left < 0.3) a.route.shift(); } else if (left < 0.08 || a.t > 25) { a.state = 'jumpUp'; a.t = 0; a.from = { x: a.x, z: a.z }; }
         break;
       }
       case 'jumpUp': {
@@ -581,7 +644,7 @@ export class Critters {
     }
     // ¿Hay comida esperándolo? (solo si está tranquilo, en el suelo)
     if ((a.state === 'rest' || a.state === 'walk') && this.wantsFood(a)) {
-      a.feeding = true; a.ap = this.approachPoint(a); a.state = 'toFeed'; a.t = 0;
+      a.feeding = true; a.ap = this.approachPoint(a); a.route = [this.stagePoint(a)]; a.state = 'toFeed'; a.t = 0;
     }
     // Animación de caminar/saltitos y gestos
     if (a.state === 'walk' || a.state === 'leave' || a.state === 'toFeed') {
