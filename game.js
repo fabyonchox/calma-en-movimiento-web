@@ -76,6 +76,8 @@ function broadcastMetrics() {
     satisfaction: S.rec ? S.rec.satisfaction : null,
     pauses: S.pauses,
     adverse: S.rec ? S.rec.adverse : null,
+    uid: S.rec ? S.rec.uid : '',
+    comfortReach: S.reach || null,
   });
 }
 

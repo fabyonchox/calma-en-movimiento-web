@@ -370,6 +370,37 @@
     min-height: 120px;
     background: var(--card-subtle);
   }
+
+  /* Perfiles de paciente */
+  .pc-muted { color: var(--muted); font-size: 0.9rem; margin: 6px 0; }
+  .pc-who { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 0.82rem; color: var(--muted); margin-bottom: 8px; }
+  .pc-link { background: none; border: 0; color: var(--acc); font: inherit; font-weight: 700; cursor: pointer; padding: 4px 8px; border-radius: 8px; transition: background 150ms ease; }
+  .pc-link:hover { background: var(--acc-light); }
+  .pc-link:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+  .pc-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .pc-actions .action-btn { width: auto; flex: 1 1 140px; }
+  .pc-summary { background: var(--card-subtle); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; margin: 8px 0 12px; }
+  .pc-name { font-weight: 800; font-size: 1.05rem; }
+  .pc-meta { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+  .pc-dx { font-size: 0.9rem; margin-top: 8px; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .pc-status { min-height: 1.2em; font-size: 0.85rem; margin-top: 8px; color: var(--muted); }
+  .pc-status[data-kind="ok"] { color: var(--success); font-weight: 600; }
+  .pc-status[data-kind="warn"] { color: var(--warn); font-weight: 600; }
+  .pc-gsi { margin: 10px 0; min-height: 44px; }
+  .pc-history { margin-top: 12px; }
+  .pc-history summary { cursor: pointer; font-weight: 700; font-size: 0.9rem; padding: 4px 0; }
+  .pc-tablewrap { overflow-x: auto; margin-top: 8px; }
+  .pc-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  .pc-table th, .pc-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .pc-table th { color: var(--muted); font-weight: 700; }
+  dialog.pc-dialog { border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); color: var(--ink); box-shadow: var(--shadow); padding: 22px; width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; }
+  dialog.pc-dialog::backdrop { background: rgba(10, 20, 17, 0.55); }
+  dialog.pc-dialog h3 { margin: 0 0 12px; font-size: 1.1rem; }
+  .pc-field { margin-bottom: 10px; }
+  .pc-field label { display: block; font-size: 0.82rem; font-weight: 700; color: var(--muted); margin-bottom: 4px; }
+  .pc-row { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; }
+  .pc-consent { display: flex; gap: 10px; align-items: flex-start; font-size: 0.85rem; background: var(--acc-light); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 8px 0; cursor: pointer; }
+  .pc-consent input { margin-top: 3px; width: 18px; height: 18px; flex: 0 0 auto; }
 </style>
 </head>
 <body>
@@ -442,6 +473,9 @@
           <button id="newSessionBtn" class="action-btn secondary-btn" type="button" style="margin-top:10px;">🔄 Nueva sesión (limpiar pantalla)</button>
         </div>
       </div>
+
+      <!-- Perfil del paciente (Google Sheets) -->
+      <div class="card" id="patientCard"></div>
 
       <!-- Configuración Clínica Dinámica -->
       <div class="card">
@@ -619,7 +653,7 @@
   </main>
 </div>
 
-<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.7.1 · prototipo no validado clínicamente</p>
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.8.0 · prototipo no validado clínicamente</p>
 <script type="module" src="./terapeuta.js"></script>
 <script>
 if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); }); }

@@ -4,7 +4,7 @@
 const CACHE = 'calma-v3';
 const ASSETS = [
   './', './index.html', './terapeuta.html', './game.js', './logic.js', './vrui.js', './sync-client.js', './sync-config.js',
-  './terapeuta.js', './feria_escena.js', './feria_fisica.js', './critters.js', './guia.js', './sfx.js', './audio/guia/manifest.json', './libs/three.module.min.js',
+  './terapeuta.js', './pacientes.js', './pacientes-config.js', './feria_escena.js', './feria_fisica.js', './critters.js', './guia.js', './sfx.js', './audio/guia/manifest.json', './libs/three.module.min.js',
 ];
 const NET_TIMEOUT_MS = 4000;
 

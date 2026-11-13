@@ -1,5 +1,8 @@
 import { getSyncServerUrl, getSessionCode } from './sync-config.js';
 import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent } from './logic.js';
+import { PatientsPanel } from './pacientes.js';
+
+const APP_VERSION = '0.8.0';
 
 let ws = null;
 let currentRoom = getSessionCode() || 'HOSPITAL-1';
@@ -24,6 +27,8 @@ function freshMetrics() {
     sessionEnded: false,
     handsSeen: null,
     config: null,
+    uid: '',
+    comfortReach: null,
   };
 }
 let currentMetrics = freshMetrics();
@@ -528,6 +533,7 @@ function renderMetrics(m) {
   if (currentPhase === 'idle' && lastState) renderMirrorState(lastState);
   updateSessionNote();
   updateSummaryText();
+  maybeAutoSaveSession();
 }
 
 function activeConfig() {
@@ -703,6 +709,57 @@ $('downloadCsvBtn').onclick = () => {
 };
 
 $('therapistNotes').oninput = updateSummaryText;
+
+/* ---------- Perfil del paciente: guardar la sesión ---------- */
+
+// Sesión terminada y con datos finales (el visor ya pasó por las preguntas finales).
+function sessionIsFinal() {
+  return !!currentMetrics.uid && (['results', 'rest', 'bye'].includes(currentPhase) || currentMetrics.sessionEnded);
+}
+
+// Arma el registro de la sesión para la planilla. Solo lo que se midió; lo no registrado queda vacío (nunca 0).
+function buildSessionRecord() {
+  if (!sessionIsFinal()) return null;
+  const m = currentMetrics;
+  const c = activeConfig() || {};
+  return {
+    id: m.uid,
+    fecha_ts: new Date().toISOString(),
+    zona: c.zone || '',
+    lado: SIDE_ES[c.side] || c.side || '',
+    modo: MODE_ES[c.gameMode] || c.gameMode || '',
+    posicion: POS_ES[c.position] || c.position || '',
+    aciertos: m.hits,
+    meta: m.reps,
+    tiempo_activo_s: m.activeSec || 0,
+    alcance_max_m: m.hits ? m.maxReach : '',
+    alcance_comodo_m: isNum(m.comfortReach) ? m.comfortReach : '',
+    dolor_pre: isNum(m.painBefore) ? m.painBefore : '',
+    dolor_post: isNum(m.painAfter) ? m.painAfter : '',
+    satisfaccion: isNum(m.satisfaction) ? m.satisfaction : '',
+    pausas: m.pauses || 0,
+    motivo_fin: END_REASONS[m.endReason] || '',
+    notas: $('therapistNotes') ? $('therapistNotes').value : '',
+    version_app: APP_VERSION,
+  };
+}
+
+let autoSaveTimer = null;
+function maybeAutoSaveSession() {
+  if (!patientsPanel || !patientsPanel.selected || !patientsPanel.signedIn) return;
+  if (!sessionIsFinal() || patientsPanel.savedUids.has(currentMetrics.uid)) return;
+  if (autoSaveTimer) return;
+  // Se espera un momento: los últimos datos (dolor final, satisfacción) pueden llegar justo después del cambio de fase.
+  autoSaveTimer = setTimeout(() => {
+    autoSaveTimer = null;
+    const rec = buildSessionRecord();
+    if (rec && patientsPanel.selected && !patientsPanel.savedUids.has(rec.id)) patientsPanel.saveSession(rec);
+  }, 1800);
+}
+
+const patientsPanel = new PatientsPanel($('patientCard'), {
+  buildSession: buildSessionRecord,
+});
 
 // Conectar al cargar
 renderMetrics({});
