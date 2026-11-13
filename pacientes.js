@@ -42,6 +42,9 @@ function decodeJwt(token) {
   } catch (e) { return null; }
 }
 
+// Solo se recuerda el NOMBRE de quien atiende en esa tablet (no es dato de pacientes).
+const PROF_KEY = 'calma_profesional';
+
 const fmtFecha = (iso) => {
   const d = new Date(iso);
   return Number.isNaN(d.getTime()) ? String(iso || '') : d.toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' });
@@ -64,6 +67,9 @@ export class PatientsPanel {
     this.sessions = null;
     this.status = '';
     this.statusKind = '';
+    this.team = false; // modo equipo: un correo compartido; cada uno elige su nombre
+    this.profesionales = [];
+    this.prof = null;
     this.savedUids = new Set();
     this.pending = new Map(); // uid -> sesión que no se pudo guardar (solo en memoria)
     this.gisReady = false;
@@ -73,6 +79,7 @@ export class PatientsPanel {
 
   get selected() { return this.patients.find((p) => p.id === this.selectedId) || null; }
   get signedIn() { return !!this.token && Date.now() / 1000 < this.exp - 30; }
+  get ready() { return this.signedIn && (!this.team || !!this.prof); } // ya se sabe de quién son los pacientes
 
   setStatus(text, kind = '') { this.status = text; this.statusKind = kind; const s = this.root.querySelector('[data-status]'); if (s) { s.textContent = text; s.dataset.kind = kind; } }
 
@@ -106,11 +113,43 @@ export class PatientsPanel {
     this.token = idToken; this.exp = Number(p.exp) || 0; this.email = String(p.email || '');
     this.setStatus('');
     this.render();
-    await this.refresh();
+    await this.loadTeam();
+    if (this.ready) await this.refresh(); else this.render();
+  }
+
+  // Modo equipo: la planilla puede tener una lista de profesionales (un solo correo compartido por las tablets).
+  async loadTeam() {
+    this.team = false; this.profesionales = []; this.prof = null;
+    try {
+      const r = await this.api('listProfessionals');
+      if (r.team && Array.isArray(r.profesionales) && r.profesionales.length) {
+        this.team = true; this.profesionales = r.profesionales;
+        let recordado = null;
+        try { recordado = localStorage.getItem(PROF_KEY); } catch (e) { /* nada */ }
+        if (recordado && this.profesionales.includes(recordado)) this.prof = recordado;
+      }
+    } catch (e) { if (e.message !== 'auth') this.setStatus(e.message, 'warn'); }
+  }
+
+  chooseProf(name) {
+    this.prof = name; this.patients = []; this.selectedId = null; this.sessions = null;
+    try { localStorage.setItem(PROF_KEY, name); } catch (e) { /* nada */ }
+    if (this.hooks.onSelect) this.hooks.onSelect(null);
+    this.refresh();
+  }
+
+  changeProf() {
+    this.prof = null; this.patients = []; this.selectedId = null; this.sessions = null;
+    try { localStorage.removeItem(PROF_KEY); } catch (e) { /* nada */ }
+    if (this.hooks.onSelect) this.hooks.onSelect(null);
+    this.render();
   }
 
   signOut(msg) {
     this.token = null; this.exp = 0; this.patients = []; this.selectedId = null; this.sessions = null;
+    this.team = false; this.profesionales = []; this.prof = null;
+    // «Salir» a propósito (sin mensaje) también olvida quién atendía: la siguiente persona debe elegir su nombre.
+    if (!msg) { try { localStorage.removeItem(PROF_KEY); } catch (e) { /* nada */ } }
     try { if (window.google && window.google.accounts) window.google.accounts.id.disableAutoSelect(); } catch (e) { /* nada */ }
     this.status = msg || ''; this.statusKind = msg ? 'warn' : '';
     this.render();
@@ -126,7 +165,7 @@ export class PatientsPanel {
       const res = await fetch(PACIENTES_API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // sin preflight CORS
-        body: JSON.stringify({ action, idToken: this.token, ...data }),
+        body: JSON.stringify({ action, idToken: this.token, profesional: this.prof || undefined, ...data }),
         redirect: 'follow',
       });
       json = await res.json();
@@ -136,6 +175,10 @@ export class PatientsPanel {
     if (json && json.code === 'AUTH') {
       this.signOut('Esta cuenta no está autorizada o el ingreso venció. Pide que agreguen tu correo a la lista autorizada.');
       throw new Error('auth');
+    }
+    if (json && json.code === 'PROF') {
+      this.prof = null; this.render();
+      throw new Error('Elige quién atiende.');
     }
     if (!json || !json.ok) throw new Error((json && json.error) || 'Error al hablar con la planilla.');
     return json;
@@ -217,8 +260,18 @@ export class PatientsPanel {
 
     // Cabecera de sesión
     r.append(el('div', { class: 'pc-who' },
-      el('span', { text: 'Ingresaste como ' + this.email }),
-      el('button', { type: 'button', class: 'pc-link', text: 'Salir', onclick: () => this.signOut('') })));
+      el('span', { text: this.team && this.prof ? 'Atiende: ' + this.prof : 'Ingresaste como ' + this.email }),
+      el('span', null,
+        this.team && this.prof ? el('button', { type: 'button', class: 'pc-link', text: 'Cambiar', onclick: () => this.changeProf() }) : null,
+        el('button', { type: 'button', class: 'pc-link', text: 'Salir', onclick: () => this.signOut('') }))));
+
+    // Modo equipo: antes de ver pacientes, cada persona elige su nombre.
+    if (this.team && !this.prof) {
+      r.append(el('p', { class: 'pc-muted', text: '¿Quién atiende? Elige tu nombre para ver tus pacientes.' }));
+      r.append(el('div', { class: 'pc-profs' }, ...this.profesionales.map((n) => el('button', { type: 'button', class: 'action-btn secondary-btn', text: n, onclick: () => this.chooseProf(n) }))));
+      r.append(el('div', { class: 'pc-status', 'data-status': '', 'data-kind': this.statusKind, text: this.status }));
+      return;
+    }
 
     // Selector
     const sel = el('select', { id: 'pcSelect', 'aria-label': 'Paciente' });
