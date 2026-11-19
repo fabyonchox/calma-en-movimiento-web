@@ -1937,6 +1937,29 @@ function startAnotherSession(recalibrate) {
   }
 }
 
+// Fases en que la tablet puede recargar el visor sin perder datos de una sesión en curso
+const RELOAD_OK_PHASES = ['idle', 'settle', 'calib', 'ready', 'results', 'rest', 'bye'];
+
+// Recargar con la versión más nueva: guarda el registro, sale de VR, borra la copia sin internet y vuelve a cargar.
+// La copia sin internet se vuelve a guardar sola al cargar la página nueva.
+async function reloadFresh() {
+  try { commitRecord(); } catch (e) { /* ok */ }
+  try { if (session) await session.end(); } catch (e) { /* ok */ }
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k.startsWith('calma-')).map((k) => caches.delete(k)));
+    }
+  } catch (e) { /* aunque falle, se recarga igual */ }
+  const u = new URL(location.href);
+  u.searchParams.set('v', Date.now().toString(36)); // evita que el navegador use una copia vieja
+  location.replace(u.toString());
+}
+
 let lastButtonActionTime = 0;
 function onButton(id, c, isRemote = false) {
   const now = performance.now();
@@ -1998,6 +2021,10 @@ function onButton(id, c, isRemote = false) {
       doRecenter(false);
       break;
     case 'done': commitRecord(); S.phase = 'rest'; break;
+    case 'reload':
+      // Desde la tablet: actualizar el visor a la versión más nueva. Nunca en medio de un juego o de la encuesta.
+      if (isRemote && RELOAD_OK_PHASES.includes(S.phase)) reloadFresh();
+      break;
     case 'leave':
       // Salir de realidad virtual: solo desde el resumen o la sala de descanso.
       if (['results', 'rest'].includes(S.phase)) {
@@ -2812,5 +2839,5 @@ function loop() {
 
 initForm();
 
-export const APP_VERSION = '0.10.3';
+export const APP_VERSION = '0.10.4';
 export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; } };

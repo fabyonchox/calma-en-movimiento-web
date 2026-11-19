@@ -2,7 +2,7 @@ import { getSyncServerUrl, getSessionCode } from './sync-config.js';
 import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure } from './logic.js';
 import { PatientsPanel } from './pacientes.js';
 
-const APP_VERSION = '0.10.3';
+const APP_VERSION = '0.10.4';
 
 let ws = null;
 let currentRoom = getSessionCode() || 'HOSPITAL-1';
@@ -310,6 +310,7 @@ function renderMirrorState(state) {
   currentPhaseBadge.textContent = 'Fase: ' + String(state.phase || '-').toUpperCase();
   updateSessionNote();
   updatePauseButton();
+  updateRoomBanner();
 
   // El visor salió de realidad virtual: se muestra un cierre claro y la opción de preparar otra sesión.
   if (currentPhase === 'idle') {
@@ -457,6 +458,15 @@ function updatePauseButton() {
   const b = $('directPauseBtn');
   if (!b) return;
   b.textContent = currentPhase === 'pause' ? '▶ Reanudar' : '⏸ Pausar';
+}
+
+// Fases del visor en que se puede recargar sin perder datos (igual que en game.js)
+const RELOAD_OK_PHASES = ['idle', 'settle', 'calib', 'ready', 'results', 'rest', 'bye'];
+
+function reloadHeadset() {
+  if (!RELOAD_OK_PHASES.includes(currentPhase)) return;
+  if (!confirm('¿Recargar el visor con la versión nueva?\n\nEl visor saldrá un momento de la realidad virtual. Después, en el Quest, hay que tocar de nuevo «Entrar» para volver al jardín.')) return;
+  triggerRemoteButton('reload');
 }
 
 // Ejecutar comando remoto al visor
@@ -795,9 +805,21 @@ function updateRoomBanner() {
     const seen = isHeadsetOnline && currentMetrics.config; // ya llegó información del visor
     if (!seen) { ver.textContent = ''; ver.dataset.warn = '0'; }
     else if (currentMetrics.version === APP_VERSION) { ver.textContent = 'Visor v' + APP_VERSION; ver.dataset.warn = '0'; }
-    else { ver.textContent = '⚠ Visor desactualizado' + (currentMetrics.version ? ' (v' + currentMetrics.version + ')' : '') + ': recarga la página en el Quest'; ver.dataset.warn = '1'; }
+    else { ver.textContent = '⚠ Visor desactualizado' + (currentMetrics.version ? ' (v' + currentMetrics.version + ')' : ''); ver.dataset.warn = '1'; }
+  }
+  // Botón para actualizar el visor desde aquí (solo cuando no hay un juego ni una encuesta en curso)
+  const rb = $('rbReload');
+  if (rb) {
+    const outdated = ver && ver.dataset.warn === '1';
+    rb.hidden = !outdated;
+    const ok = RELOAD_OK_PHASES.includes(currentPhase);
+    rb.disabled = !ok;
+    rb.title = ok ? 'Recarga la página del visor con la versión más nueva' : 'Disponible al terminar el juego y la encuesta';
+    rb.textContent = ok ? '🔄 Recargar visor' : '🔄 Recargar visor (al terminar la sesión)';
   }
 }
+
+if ($('rbReload')) $('rbReload').onclick = reloadHeadset;
 
 document.querySelectorAll('.rb-pill').forEach((b) => {
   b.onclick = () => {
