@@ -112,8 +112,23 @@ export function followCredit(headYaw, birdYaw, lagYaw, headSpeed) {
   return { near, credit: near && engaged };
 }
 
-// Lo que dice el pajarito al saludar (se van turnando)
-export const BIRD_GREETINGS = ['¡Hola! ¿Cómo estás?', '¡Gracias por acompañarme!', '¡Qué rico volar contigo!', '¡Hola! ¡Qué lindo día!'];
+// Lo que dice el pajarito al saludar. Se barajan al empezar y no se repiten hasta haber usado todas.
+// Frases cortas (se leen de un vistazo), amables y sin exigir nada al paciente.
+export const BIRD_GREETINGS = [
+  '¡Hola! ¿Cómo estás?', '¡Gracias por acompañarme!', '¡Qué rico volar contigo!', '¡Hola! ¡Qué lindo día!',
+  '¡Me encanta tu compañía!', '¡Pío pío! ¡Hola!', '¡Qué bien me seguiste!', '¡Respira tranquilo!',
+  '¡Hoy el cielo está precioso!', '¡Volemos juntos otra vez!', '¡Qué calma se siente aquí!', '¡Hola, amigo!',
+  '¡Me alegra verte!', '¡Qué suave es el viento!', '¡Tú lo haces muy bien!', '¡Escucha el canto del bosque!',
+  '¡Gracias por mirarme!', '¡Qué bonito día para volar!', '¡Sigue a tu ritmo!', '¡Te traje una canción!',
+  '¡Hola! Vengo del árbol grande', '¡Aquí todo está en calma!', '¡Qué gusto saludarte!', '¡Un respiro y seguimos!',
+];
+
+// Orden barajado de los saludos (Fisher-Yates). rng opcional para pruebas.
+export function greetingOrder(rng = Math.random) {
+  const a = BIRD_GREETINGS.slice();
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
 // Tiempo acumulado siguiéndolo con la mirada para que se detenga a saludar (técnico, a confirmar en el Quest)
 export const FOLLOW_NEED_MS = 3000;
 

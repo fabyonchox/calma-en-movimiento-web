@@ -54,13 +54,13 @@ export function grassTexture(T, base = 0x80b878) {
     }
     for (let i = 0; i < 3400; i++) { // hojitas
       const x = r() * 256; const y = r() * 256; const len = 2 + r() * 6; const a = -Math.PI / 2 + (r() - 0.5) * 0.9;
-      g.strokeStyle = shade(base, 0.62 + r() * 0.7);
-      g.globalAlpha = 0.65; g.lineWidth = 1 + (r() > 0.85 ? 1 : 0);
+      g.strokeStyle = shade(base, 0.8 + r() * 0.42); // contraste suave (antes 0.62–1.32)
+      g.globalAlpha = 0.4; g.lineWidth = 1 + (r() > 0.85 ? 1 : 0);
       g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len); g.stroke();
     }
     g.globalAlpha = 1;
   }
-  return (cache[key] = toTexture(T, c, 34, 34));
+  return (cache[key] = toTexture(T, c, 24, 24));
 }
 
 // Corteza: vetas verticales irregulares
@@ -230,7 +230,7 @@ function cloudTexture(T) {
   if (c) {
     const g = c.getContext('2d'); const r = rng(17);
     for (let i = 0; i < 34; i++) {
-      const x = 36 + r() * 184; const y = 52 + r() * 36 - Math.abs(x - 128) * 0.18; const rad = 20 + r() * 32;
+      const x = 64 + r() * 128; const y = 58 + r() * 20 - Math.abs(x - 128) * 0.14; const rad = 18 + r() * 26; // siempre dentro del lienzo: sin bordes cortados
       const grd = g.createRadialGradient(x, y, 0, x, y, rad);
       grd.addColorStop(0, 'rgba(255,255,255,0.85)'); grd.addColorStop(0.6, 'rgba(255,252,245,0.45)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
       g.fillStyle = grd; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
@@ -326,4 +326,93 @@ export function tintGround(T, geometry, seed = 3) {
     col[i * 3] = Math.min(1, k * 1.02); col[i * 3 + 1] = Math.min(1, k); col[i * 3 + 2] = Math.min(1, k * 0.9);
   }
   geometry.setAttribute('color', new T.BufferAttribute(col, 3));
+}
+
+/* ---------------- Horizonte: cerros y bosque lejano (360°) ---------------- */
+
+// Anillo de cerros suaves alrededor de todo el jardín; la bruma (niebla de la escena) los aclara con la distancia.
+function hillRing(T, radius, baseH, amp, color, seed, segs = 160) {
+  const r = rng(seed);
+  const ph = [r() * 6.28, r() * 6.28, r() * 6.28];
+  const pos = []; const col = []; const idx = [];
+  const top = new T.Color(color); const foot = new T.Color(color).multiplyScalar(0.82);
+  for (let i = 0; i <= segs; i++) {
+    const a = (i / segs) * Math.PI * 2;
+    const h = baseH + amp * (0.55 * Math.sin(a * 3 + ph[0]) + 0.3 * Math.sin(a * 7 + ph[1]) + 0.15 * Math.sin(a * 13 + ph[2]));
+    const x = Math.sin(a) * radius; const z = -Math.cos(a) * radius;
+    // tres filas: pie (bajo el suelo), ladera, cumbre (redondeada hacia atrás)
+    pos.push(x, -1, z, x * 1.01, h * 0.6, z * 1.01, x * 1.04, Math.max(0.5, h), z * 1.04);
+    [foot, foot.clone().lerp(top, 0.6), top].forEach((c) => col.push(c.r, c.g, c.b));
+    if (i < segs) {
+      const b = i * 3;
+      idx.push(b, b + 3, b + 1, b + 1, b + 3, b + 4, b + 1, b + 4, b + 2, b + 2, b + 4, b + 5);
+    }
+  }
+  const g = new T.BufferGeometry();
+  g.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new T.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return new T.Mesh(g, new T.MeshLambertMaterial({ vertexColors: true, side: T.DoubleSide }));
+}
+
+export function addHorizon(T, parent) {
+  const group = new T.Group();
+  group.add(hillRing(T, 52, 7, 5, 0x7f9fb0, 91)); // cerros lejanos, azulados
+  group.add(hillRing(T, 40, 4, 3.5, 0x6f9a78, 57)); // cerros más cerca, verdes
+  // Bosque lejano: copas redondeadas (una sola malla instanciada, liviana para el Quest)
+  const r = rng(303);
+  const n = 80;
+  const geo = new T.SphereGeometry(1, 14, 10);
+  const mat = new T.MeshLambertMaterial({ color: 0xffffff });
+  const trees = new T.InstancedMesh(geo, mat, n);
+  const m = new T.Matrix4(); const q = new T.Quaternion(); const sc = new T.Vector3(); const p = new T.Vector3();
+  const greens = [0x7ea486, 0x88ad8a, 0x739a7c, 0x93b48f, 0x9fb894]; // tonos suaves: la bruma los aclara aún más
+  for (let i = 0; i < n; i++) {
+    const a = r() * Math.PI * 2; const d = 30 + r() * 8;
+    const s = 1.1 + r() * 1.3;
+    p.set(Math.sin(a) * d, s * 0.7, -Math.cos(a) * d);
+    sc.set(s, s * (1.1 + r() * 0.5), s);
+    m.compose(p, q, sc);
+    trees.setMatrixAt(i, m);
+    trees.setColorAt(i, new T.Color(greens[Math.floor(r() * greens.length)]));
+  }
+  group.add(trees);
+  parent.add(group);
+  return group;
+}
+
+/* ---------------- Pradera con flores silvestres ---------------- */
+
+export function addMeadowFlowers(T, parent, { count = 220, rMin = 1.6, rMax = 12, seed = 12, avoid = () => false } = {}) {
+  const r = rng(seed);
+  const group = new T.Group();
+  // flor = disco de pétalos (forma de 5 lóbulos) + centro
+  const shape = new T.Shape();
+  for (let i = 0; i <= 60; i++) {
+    const a = (i / 60) * Math.PI * 2; const rr = 0.07 * (0.72 + 0.28 * Math.cos(5 * a));
+    if (i === 0) shape.moveTo(Math.cos(a) * rr, Math.sin(a) * rr); else shape.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+  }
+  const petalGeo = new T.ShapeGeometry(shape);
+  petalGeo.rotateX(-Math.PI / 2);
+  const petals = new T.InstancedMesh(petalGeo, new T.MeshLambertMaterial({ color: 0xffffff, emissive: 0x2a2a2a, side: T.DoubleSide }), count);
+  const cores = new T.InstancedMesh(new T.SphereGeometry(0.014, 8, 6), new T.MeshLambertMaterial({ color: 0xf5cf63 }), count);
+  const cols = [0xf6e7ef, 0xf2c6d6, 0xd9cdf2, 0xfff3c4, 0xffffff, 0xc9def5];
+  const m = new T.Matrix4(); const q = new T.Quaternion(); const e = new T.Euler(); const sc = new T.Vector3(); const p = new T.Vector3();
+  let k = 0;
+  for (let tries = 0; k < count && tries < count * 6; tries++) {
+    const a = r() * Math.PI * 2; const d = rMin + Math.sqrt(r()) * (rMax - rMin);
+    const x = Math.sin(a) * d; const z = -Math.cos(a) * d;
+    if (avoid(x, z)) continue;
+    const s = 0.6 + r() * 0.8; const h = 0.05 + r() * 0.12;
+    e.set(0.25 + r() * 0.35, r() * 6.28, (r() - 0.5) * 0.3); // un poco inclinadas: se ven mejor de lejos q.setFromEuler(e);
+    p.set(x, h, z); sc.set(s, s, s); m.compose(p, q, sc);
+    petals.setMatrixAt(k, m); petals.setColorAt(k, new T.Color(cols[Math.floor(r() * cols.length)]));
+    p.set(x, h + 0.006, z); m.compose(p, q, sc); cores.setMatrixAt(k, m);
+    k++;
+  }
+  petals.count = k; cores.count = k;
+  group.add(petals, cores);
+  parent.add(group);
+  return group;
 }

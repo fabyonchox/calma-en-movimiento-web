@@ -1,7 +1,7 @@
 // Pruebas del modo "Respira" (sin visor): node pruebas/test_respira.mjs
 import assert from 'node:assert/strict';
 import {
-  BREATH_PATTERNS, breathAt, cycleSecs, plan, perchAngles, NECK_RANGES, looking, birdPath, starPose, STAR_NEAR, STAR_FAR, followCredit, BIRD_GREETINGS,
+  BREATH_PATTERNS, breathAt, cycleSecs, plan, perchAngles, NECK_RANGES, looking, birdPath, starPose, STAR_NEAR, STAR_FAR, followCredit, BIRD_GREETINGS, greetingOrder,
 } from '../respira_logica.js';
 
 // 1) Cada patrón: tramos en orden, tamaño de la estrella sube al inhalar y baja al exhalar
@@ -96,7 +96,10 @@ for (const [key, r] of Object.entries(NECK_RANGES)) {
   assert.equal(followCredit(0, 3, 2, 0.5).credit, false, 'pajarito pasando por el centro y cabeza quieta: no cuenta');
   assert.equal(followCredit(-2, 4, -6, 12).credit, true, 'acompañando el paso por el centro: cuenta');
   assert.equal(followCredit(30, -10, -12, 10).credit, false, 'mirando al otro lado: no cuenta');
-  assert.ok(BIRD_GREETINGS.length >= 3 && BIRD_GREETINGS.every((t) => t.length <= 28), 'saludos cortos');
+  assert.ok(BIRD_GREETINGS.length >= 20 && BIRD_GREETINGS.every((t) => t.length <= 30), 'saludos variados y cortos');
+  assert.equal(new Set(BIRD_GREETINGS).size, BIRD_GREETINGS.length, 'sin saludos duplicados');
+  const ord = greetingOrder();
+  assert.equal(new Set(ord).size, BIRD_GREETINGS.length, 'el orden barajado no repite');
 }
 
 console.log('OK: pruebas de Respira');

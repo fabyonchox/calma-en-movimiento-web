@@ -1,7 +1,7 @@
 // "Respira": escena de relajación (estrella que respira, luciérnagas, pajaritos que siguen la mirada) y música.
 // Estilo suave: formas redondeadas, sombreado liso, brillos difusos. Nada se mueve rápido ni se pega a la cabeza.
 import { RelaxMusic } from './musica.js';
-import { breathAt, plan, WORDS, cycleSecs, starPose, birdPath, followCredit, FOLLOW_LAG_SECS, FOLLOW_NEED_MS, BIRD_GREETINGS } from './respira_logica.js';
+import { breathAt, plan, WORDS, cycleSecs, starPose, birdPath, followCredit, FOLLOW_LAG_SECS, FOLLOW_NEED_MS, greetingOrder } from './respira_logica.js';
 import { FONT } from './guia.js';
 
 const DEG = Math.PI / 180;
@@ -243,6 +243,7 @@ export class BreathScene {
     this.gazeMs = 0;
     this.trail = [];
     this.skyK = 0; this.flow = 0;
+    this.greetQueue = greetingOrder();
     this.starGroup.visible = this.stage === 'star';
     this.trailPoints.visible = this.stage === 'star';
     this.birds.forEach((b) => { b.root.visible = false; b.state = 'idle'; });
@@ -487,7 +488,8 @@ export class BreathScene {
         bird.greetPos = { x: p.x, y: p.y, z: p.z };
         this.follow.visible = false;
         this.birdsDone++;
-        this.drawSay(BIRD_GREETINGS[(this.birdsDone - 1) % BIRD_GREETINGS.length]);
+        if (!this.greetQueue || !this.greetQueue.length) this.greetQueue = greetingOrder();
+        this.drawSay(this.greetQueue.shift());
         if (this.host.sfx) this.host.sfx.birdChirp(p.x);
         this.host.onBird && this.host.onBird(this.birdsDone);
       }
