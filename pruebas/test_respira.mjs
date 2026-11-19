@@ -49,7 +49,9 @@ for (const [key, r] of Object.entries(NECK_RANGES)) {
     // alternan de lado
     for (let i = 1; i < angs.length; i++) assert.ok(Math.sign(angs[i]) !== Math.sign(angs[i - 1]));
     // los primeros, más cerca del centro
-    assert.ok(Math.abs(angs[0]) <= r.deg * 0.45 + 1e-9);
+    assert.ok(Math.abs(angs[0]) <= Math.max(r.deg * 0.45, 12) + 1e-9);
+    // siempre hay que girar algo: ningún pajarito queda justo al frente
+    angs.forEach((a) => assert.ok(Math.abs(a) >= 12 - 1e-9, 'pajarito demasiado al centro: ' + a));
   }
 }
 assert.ok(perchAngles('desconocido', 3).every((a) => Math.abs(a) <= 20), 'rango desconocido usa el suave');

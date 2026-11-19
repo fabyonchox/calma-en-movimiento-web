@@ -23,6 +23,9 @@ export const DEFAULT_NECK = 'suave';
 // Contenido de la sesión: solo estrella, solo pajaritos, o ambos (primero la estrella).
 export const BREATH_CONTENT = ['ambos', 'estrella', 'pajaros'];
 
+// Margen técnico de la mirada: la cabeza apunta al pajarito si está a 8° o menos
+export const GAZE_TOLERANCE_DEG = 8;
+
 export const WORDS = { inhale: 'Inhala', hold: 'Sostén', exhale: 'Exhala', holdOut: 'Pausa' };
 
 export function patternOf(key) { return BREATH_PATTERNS[key] || BREATH_PATTERNS[DEFAULT_PATTERN]; }
@@ -77,14 +80,15 @@ export function perchAngles(rangeKey, n, rng = Math.random) {
   for (let i = 0; i < n; i++) {
     const side = i % 2 === 0 ? 1 : -1;
     const ramp = Math.min(1, 0.45 + i * 0.15); // los primeros, más cerca del centro
-    const a = max * ramp * (0.75 + 0.25 * rng());
+    // Nunca tan al centro que no haga falta girar (mínimo: el margen de la mirada + 4°), ni más allá del rango.
+    const minA = Math.min(max, GAZE_TOLERANCE_DEG + 4);
+    const a = Math.max(minA, max * ramp * (0.75 + 0.25 * rng()));
     out.push(side * Math.min(max, a));
   }
   return out;
 }
 
 // ¿La cabeza apunta al pajarito? (técnico: margen de 8° alrededor del punto)
-export const GAZE_TOLERANCE_DEG = 8;
 export function looking(yawDeg, targetDeg, tol = GAZE_TOLERANCE_DEG) {
   return Math.abs(yawDeg - targetDeg) <= tol;
 }

@@ -3,6 +3,7 @@ import { FairScene } from './feria_escena.js';
 import { Guide, GuideVoice } from './guia.js';
 import { Sfx } from './sfx.js';
 import { BreathScene } from './respira.js';
+import { grassTexture, barkTexture, leafTexture, stoneTexture, waterTexture, wickerTexture, softShadow, organicSphere, addClouds } from './ambiente.js';
 import {
   DEFAULTS, ZONES, SIZES, MESSAGES, normalizeConfig, mergeConfig, REMOTE_KEYS, effectiveDistances, pickTarget,
   horizontalDistance, distance, formatTime, newRecord, buildCSV, buildSummary, sustainedReach,
@@ -434,7 +435,7 @@ function thudBasket() {
 function addBranch(parent, mat, from, to, r0, r1) {
   const dir = new THREE.Vector3().subVectors(to, from);
   const len = dir.length();
-  const geo = new THREE.CylinderGeometry(r1, r0, 1, 8);
+  const geo = new THREE.CylinderGeometry(r1, r0, 1, 14);
   const m = new THREE.Mesh(geo, mat);
   m.scale.set(1, len, 1);
   m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
@@ -463,10 +464,11 @@ function buildAppleTree() {
   treeGroup = new THREE.Group();
   treeGroup.position.set(0, 0, -1.6);
 
-  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x614835 });
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.25, 2.1, 12), trunkMat);
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0xb59a82, map: barkTexture(THREE, 0x6e5139) });
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.25, 2.1, 24), trunkMat);
   trunk.position.y = 1.05;
   treeGroup.add(trunk);
+  treeGroup.add(softShadow(THREE, 1.5, 0.55)); // sombra suave del follaje sobre el pasto
 
   for (let r = 0; r < 4; r++) {
     const ang = (r * Math.PI) / 2 + 0.35;
@@ -479,13 +481,13 @@ function buildAppleTree() {
     addBranch(treeGroup, trunkMat, top, new THREE.Vector3(x, y, z), 0.07, 0.035);
   });
 
-  const leafMats = [0x488b4f, 0x5ba363, 0x3d7844].map((c) => new THREE.MeshLambertMaterial({ color: c }));
+  const leafMats = [0x488b4f, 0x5ba363, 0x3d7844].map((c) => new THREE.MeshLambertMaterial({ color: 0xffffff, map: leafTexture(THREE, c) }));
   const clusters = [
     [0, 2.55, 0, 0.75], [0.55, 2.4, 0.35, 0.55], [-0.55, 2.4, 0.35, 0.55],
     [0.7, 2.35, 0.9, 0.5], [-0.7, 2.35, 0.9, 0.5], [0, 2.4, 1.0, 0.55], [0, 2.75, 0.5, 0.6],
   ];
   clusters.forEach(([x, y, z, r], i) => {
-    const s = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), leafMats[i % 3]);
+    const s = organicSphere(THREE, r, leafMats[i % 3], { seed: i + 3, bump: 0.12 });
     s.scale.y = 0.75;
     s.position.set(x, Math.max(y, CANOPY_BOTTOM + r * 0.75), z);
     treeGroup.add(s);
@@ -506,12 +508,13 @@ function buildAppleTree() {
 
 function buildOneBasket(x) {
   const group = new THREE.Group();
-  const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.6, 16), new THREE.MeshLambertMaterial({ color: 0x584332 }));
+  const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.6, 28), new THREE.MeshLambertMaterial({ color: 0xa08a78, map: barkTexture(THREE, 0x584332) }));
+  group.add(softShadow(THREE, 0.32, 0.5));
   stump.position.y = 0.3;
   group.add(stump);
 
-  const rattan = new THREE.MeshStandardMaterial({ color: 0xb58451, roughness: 0.7, metalness: 0.05, side: THREE.DoubleSide });
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.13, 0.22, 24, 1, true), rattan);
+  const rattan = new THREE.MeshStandardMaterial({ color: 0xffffff, map: wickerTexture(THREE, 0xb58451), roughness: 0.75, metalness: 0.0, side: THREE.DoubleSide });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.13, 0.22, 40, 1, true), rattan);
   body.position.y = 0.71;
   const bottom = new THREE.Mesh(new THREE.CircleGeometry(0.13, 24), rattan);
   bottom.rotation.x = -Math.PI / 2;
@@ -519,7 +522,7 @@ function buildOneBasket(x) {
   group.add(body, bottom);
 
   const rimMat = new THREE.MeshStandardMaterial({ color: 0xc9945b, roughness: 0.5 });
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.016, 12, 32), rimMat);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.016, 16, 64), rimMat);
   rim.rotation.x = Math.PI / 2;
   rim.position.y = 0.82;
   group.add(rim);
@@ -1017,23 +1020,24 @@ function buildSky() {
   const skyMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false });
   const sky = new THREE.Mesh(skyGeo, skyMat);
   scene.add(sky);
+  addClouds(THREE, scene); // nubes suaves y lejanas
 }
 
 function buildEnvironment() {
   // Pradera zen amplia
-  const groundMat = new THREE.MeshLambertMaterial({ color: 0x80b878 });
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(65, 48), groundMat);
+  const groundMat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: grassTexture(THREE, 0x80b878) });
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(65, 96), groundMat);
   ground.rotation.x = -Math.PI / 2;
   anchor.add(ground);
 
   // Sendero de piedras de río suaves y redondeadas
-  const stoneMat = new THREE.MeshLambertMaterial({ color: 0xc4cec6 });
+  const stoneMat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: stoneTexture(THREE, 0xc4cec6) });
   const stonePositions = [
     [0, -0.75, 0.28, 0.35], [0.38, -1.05, 0.24, 0.30], [-0.36, -1.15, 0.25, 0.32],
     [0.12, -1.45, 0.26, 0.33], [-0.28, -1.65, 0.22, 0.28], [0.42, -1.85, 0.26, 0.32], [-0.38, -2.05, 0.24, 0.30]
   ];
   stonePositions.forEach(([sx, sz, rx, rz], idx) => {
-    const stone = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), stoneMat);
+    const stone = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), stoneMat);
     stone.scale.set(rx, 0.05, rz);
     stone.position.set(sx, 0.02, sz);
     stone.rotation.y = idx * 0.8;
@@ -1041,12 +1045,13 @@ function buildEnvironment() {
   });
 
   // Farolillos zen japoneses de piedra (Tōrō) con luz cálida interior
-  const lanternMat = new THREE.MeshLambertMaterial({ color: 0x9ba6a0 });
+  const lanternMat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: stoneTexture(THREE, 0x9ba6a0) });
   const lanternLightMat = new THREE.MeshBasicMaterial({ color: 0xffe294 });
   [[-1.4, -1.7], [1.4, -1.9]].forEach(([lx, lz]) => {
     const lantern = new THREE.Group();
     // Base y poste
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 0.5, 8), lanternMat);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 0.5, 20), lanternMat);
+    lantern.add(softShadow(THREE, 0.3, 0.5));
     post.position.y = 0.25;
     // Caja de luz con ranura
     const box = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.20, 0.22), lanternMat);
@@ -1064,38 +1069,41 @@ function buildEnvironment() {
   });
 
   // Estanque / Arroyo sereno curvado en el plano medio
-  const creekMat = new THREE.MeshLambertMaterial({ color: 0x62a49b, transparent: true, opacity: 0.75 });
+  const creekMat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: waterTexture(THREE, 0x62a49b), transparent: true, opacity: 0.8 });
   const creek = new THREE.Mesh(new THREE.PlaneGeometry(18, 4.5), creekMat);
   creek.rotation.x = -Math.PI / 2;
   creek.position.set(0, 0.01, -6.8);
   anchor.add(creek);
 
   // Rocas zen lisas de río
-  const rockMat = new THREE.MeshLambertMaterial({ color: 0x808d87 });
-  [[-2.0, -2.6, 0.45], [2.3, -2.8, 0.52], [-2.8, -4.4, 0.75], [3.3, -4.8, 0.85]].forEach(([rx, rz, s]) => {
-    const rock = new THREE.Mesh(new THREE.SphereGeometry(s, 16, 12), rockMat);
+  const rockMat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: stoneTexture(THREE, 0x808d87) });
+  [[-2.0, -2.6, 0.45], [2.3, -2.8, 0.52], [-2.8, -4.4, 0.75], [3.3, -4.8, 0.85]].forEach(([rx, rz, s], i) => {
+    const rock = organicSphere(THREE, s, rockMat, { seed: 20 + i, bump: 0.16 });
     rock.scale.set(1.3, 0.62, 1.1);
     rock.position.set(rx, s * 0.32, rz);
     anchor.add(rock);
+    const sh = softShadow(THREE, s * 1.6, 0.45, 1.3, 1.1);
+    sh.position.set(rx, 0.006, rz);
+    anchor.add(sh);
   });
 
   // Colinas suaves en el horizonte
-  const hillMat1 = new THREE.MeshLambertMaterial({ color: 0x709f7a });
-  const hillMat2 = new THREE.MeshLambertMaterial({ color: 0x628f6e });
+  const hillMat1 = new THREE.MeshLambertMaterial({ color: 0xffffff, map: leafTexture(THREE, 0x709f7a) });
+  const hillMat2 = new THREE.MeshLambertMaterial({ color: 0xffffff, map: leafTexture(THREE, 0x628f6e) });
   [
     [-22, -32, 13, hillMat1], [8, -36, 16, hillMat2], [28, -29, 11, hillMat1],
     [-12, -45, 18, hillMat2], [20, -44, 15, hillMat1], [-32, -24, 10, hillMat2]
   ].forEach(([x, z, r, mat]) => {
-    const h = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 14), mat);
+    const h = organicSphere(THREE, r, mat, { seed: x + z, bump: 0.05, w: 40, h: 24 });
     h.position.set(x, -r * 0.58, z);
     anchor.add(h);
   });
 
   // Árboles estilizados (mezcla de bosque verde y cerezo sakura)
-  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x7d5e41 });
-  const leafMatGreen1 = new THREE.MeshLambertMaterial({ color: 0x5a9a62 });
-  const leafMatGreen2 = new THREE.MeshLambertMaterial({ color: 0x6bb075 });
-  const leafMatSakura = new THREE.MeshLambertMaterial({ color: 0xebb1c6 });
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0xc0a68e, map: barkTexture(THREE, 0x7d5e41) });
+  const leafMatGreen1 = new THREE.MeshLambertMaterial({ color: 0xffffff, map: leafTexture(THREE, 0x5a9a62) });
+  const leafMatGreen2 = new THREE.MeshLambertMaterial({ color: 0xffffff, map: leafTexture(THREE, 0x6bb075) });
+  const leafMatSakura = new THREE.MeshLambertMaterial({ color: 0xffffff, map: leafTexture(THREE, 0xebb1c6) });
 
   const treeData = [
     [-3.8, -5.5, leafMatGreen1, 1.0],
@@ -1111,15 +1119,17 @@ function buildEnvironment() {
 
   treeData.forEach(([tx, tz, lMat, scale]) => {
     const tree = new THREE.Group();
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * scale, 0.18 * scale, 1.6 * scale, 10), trunkMat);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * scale, 0.18 * scale, 1.6 * scale, 20), trunkMat);
     trunk.position.y = 0.8 * scale;
     tree.add(trunk);
+    tree.add(softShadow(THREE, 1.3 * scale, 0.5));
 
-    const crown1 = new THREE.Mesh(new THREE.SphereGeometry(0.9 * scale, 16, 12), lMat);
+    const seed = Math.round((tx + tz) * 10);
+    const crown1 = organicSphere(THREE, 0.9 * scale, lMat, { seed: seed + 1, bump: 0.14 });
     crown1.position.y = 1.9 * scale;
-    const crown2 = new THREE.Mesh(new THREE.SphereGeometry(0.7 * scale, 14, 10), lMat);
+    const crown2 = organicSphere(THREE, 0.7 * scale, lMat, { seed: seed + 2, bump: 0.14 });
     crown2.position.set(0.35 * scale, 2.2 * scale, 0.15 * scale);
-    const crown3 = new THREE.Mesh(new THREE.SphereGeometry(0.65 * scale, 14, 10), lMat);
+    const crown3 = organicSphere(THREE, 0.65 * scale, lMat, { seed: seed + 3, bump: 0.14 });
     crown3.position.set(-0.35 * scale, 2.05 * scale, -0.2 * scale);
     tree.add(crown1, crown2, crown3);
 
@@ -1132,6 +1142,7 @@ function buildEnvironment() {
   const flowerPetalMat1 = new THREE.MeshLambertMaterial({ color: 0xb5a0d6 });
   const flowerPetalMat2 = new THREE.MeshLambertMaterial({ color: 0xfff6cf });
   const flowerPetalMat3 = new THREE.MeshLambertMaterial({ color: 0xf5bfb0 });
+  const flowerCenterMat = new THREE.MeshLambertMaterial({ color: 0xf2c94c });
 
   [
     [-1.2, -1.8, flowerPetalMat1], [1.3, -2.0, flowerPetalMat2],
@@ -1142,9 +1153,19 @@ function buildEnvironment() {
     for (let f = 0; f < 3; f++) {
       const ox = (f - 1) * 0.12;
       const oz = ((f % 2) - 0.5) * 0.1;
-      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.22, 6), flowerStemMat);
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.016, 0.22, 10), flowerStemMat);
       stem.position.set(ox, 0.11, oz);
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), pMat);
+      // Flor de 5 pétalos redondeados con centro amarillo
+      const head = new THREE.Group();
+      for (let k = 0; k < 5; k++) {
+        const pet = new THREE.Mesh(new THREE.SphereGeometry(0.028, 16, 12), pMat);
+        const a = (k / 5) * Math.PI * 2;
+        pet.scale.set(1, 0.35, 0.6);
+        pet.position.set(Math.cos(a) * 0.03, 0, Math.sin(a) * 0.03);
+        pet.rotation.y = -a;
+        head.add(pet);
+      }
+      head.add(new THREE.Mesh(new THREE.SphereGeometry(0.016, 14, 10), flowerCenterMat));
       head.position.set(ox, 0.23, oz);
       patch.add(stem, head);
     }
@@ -2795,5 +2816,5 @@ function loop() {
 
 initForm();
 
-export const APP_VERSION = '0.10.0';
-export const __test = { S, update, onButton, phaseModel, enterVR, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; } };
+export const APP_VERSION = '0.10.1';
+export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; } };
