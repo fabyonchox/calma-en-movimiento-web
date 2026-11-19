@@ -2839,5 +2839,5 @@ function loop() {
 
 initForm();
 
-export const APP_VERSION = '0.10.4';
+export const APP_VERSION = '0.10.5';
 export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; } };
