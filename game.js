@@ -1004,6 +1004,7 @@ function initThree() {
 }
 
 // Domo de cielo con gradiente suave zen
+let skyMaterial = null; // se oscurece suavemente en la etapa de la estrella (cielo de noche)
 function buildSky() {
   const canvas = document.createElement('canvas');
   canvas.width = 16;
@@ -1020,6 +1021,7 @@ function buildSky() {
   const tex = new THREE.CanvasTexture(canvas);
   const skyGeo = new THREE.SphereGeometry(95, 32, 16);
   const skyMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false });
+  skyMaterial = skyMat;
   const sky = new THREE.Mesh(skyGeo, skyMat);
   scene.add(sky);
   addClouds(THREE, scene); // nubes suaves y lejanas
@@ -2300,20 +2302,26 @@ function headGaze() {
 }
 
 const DAY = { bg: 0xd2ebed, hemi: 1.15, sun: 0.95 };
-const DUSK = { bg: 0xaab6d9, hemi: 0.72, sun: 0.4 };
-let duskK = 0;
-let _c1 = null; let _c2 = null;
+const DUSK = { bg: 0xaab6d9, hemi: 0.72, sun: 0.4, sky: 0xc9cfe6 };
+// Noche suave para la estrella: el jardín se oscurece (sin quedar negro) para que la estrella y su espiral destaquen
+const NIGHT = { bg: 0x2b3352, hemi: 0.42, sun: 0.12, sky: 0x4a5584 };
+let duskK = 0; // 0 = día, 1 = atardecer, 2 = noche
+let _cs = null;
 function duskTo(target, dt) {
   if (!scene) return;
   const before = duskK;
-  duskK += (target - duskK) * Math.min(1, (dt || 0.016) * 0.6);
-  if (Math.abs(duskK - before) < 1e-4 && (duskK === 0 || duskK === 1)) return;
+  duskK += (target - duskK) * Math.min(1, (dt || 0.016) * 0.45);
+  if (Math.abs(duskK - before) < 1e-4 && [0, 1, 2].includes(duskK)) return;
   if (Math.abs(target - duskK) < 0.002) duskK = target;
-  if (!_c1) { _c1 = new THREE.Color(DAY.bg); _c2 = new THREE.Color(DUSK.bg); }
-  if (scene.background && scene.background.isColor) scene.background.copy(_c1).lerp(_c2, duskK);
-  if (scene.fog) scene.fog.color.copy(_c1).lerp(_c2, duskK);
-  if (hemiLight) hemiLight.intensity = DAY.hemi + (DUSK.hemi - DAY.hemi) * duskK;
-  if (sunLight) sunLight.intensity = DAY.sun + (DUSK.sun - DAY.sun) * duskK;
+  if (!_cs) _cs = { bg: [DAY.bg, DUSK.bg, NIGHT.bg].map((c) => new THREE.Color(c)), sky: [0xffffff, DUSK.sky, NIGHT.sky].map((c) => new THREE.Color(c)), tmp: new THREE.Color() };
+  const i = duskK <= 1 ? 0 : 1; const k = duskK - i;
+  const mix = (arr) => _cs.tmp.copy(arr[i]).lerp(arr[i + 1], k);
+  const lerp = (a, b, c) => (i === 0 ? a + (b - a) * k : b + (c - b) * k);
+  if (scene.background && scene.background.isColor) scene.background.copy(mix(_cs.bg));
+  if (scene.fog) scene.fog.color.copy(mix(_cs.bg));
+  if (skyMaterial) skyMaterial.color.copy(mix(_cs.sky));
+  if (hemiLight) hemiLight.intensity = lerp(DAY.hemi, DUSK.hemi, NIGHT.hemi);
+  if (sunLight) sunLight.intensity = lerp(DAY.sun, DUSK.sun, NIGHT.sun);
 }
 
 function pausePlay() {
@@ -2561,7 +2569,8 @@ function update(dt, now) {
     if (breathOn && nature.on) nature.stop();
     else if (!breathOn && !nature.on) nature.start();
   }
-  duskTo(breathOn ? 1 : 0, dt);
+  // Con la estrella, noche suave (más inmersivo); con los pajaritos, atardecer; fuera de Respira, día.
+  duskTo(breathOn ? (breathScene && breathScene.stage === 'star' ? 2 : 1) : 0, dt);
 
   if (S.phase !== 'play') return;
 
@@ -2844,5 +2853,5 @@ function loop() {
 
 initForm();
 
-export const APP_VERSION = '0.10.6';
+export const APP_VERSION = '0.10.7';
 export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; } };

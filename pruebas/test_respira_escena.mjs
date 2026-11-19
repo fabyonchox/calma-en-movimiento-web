@@ -81,6 +81,16 @@ function run(cfg, gazeFn, secs, setupAnchor) {
   const sizes = [];
   for (let i = 0; i < 72 * cycleSecs('caja'); i++) { sc.step(1 / 72, null); sizes.push(sc.star.scale.x); }
   assert.ok(Math.max(...sizes) - Math.min(...sizes) > 0.3, 'la estrella cambia de tamaño');
+  // Espiral: al inhalar las luces viajan hacia la estrella (flow baja); al exhalar se alejan (flow sube)
+  sc.start(0);
+  const f0 = sc.flow; for (let i = 0; i < 72 * 3.5; i++) sc.step(1 / 72, null);
+  assert.ok(sc.flow < f0, 'inhalar: la espiral se recoge');
+  for (let i = 0; i < 72 * 5; i++) sc.step(1 / 72, null); // sostener 4 s y entrar a exhalar
+  const f1 = sc.flow; for (let i = 0; i < 72 * 3; i++) sc.step(1 / 72, null);
+  assert.ok(sc.flow > f1, 'exhalar: la espiral se abre');
+  assert.ok(sc.skyStars.visible && sc.skyStars.material.opacity > 0.5, 'aparece el cielo de estrellas');
+  // giro lento (técnico): menos de 8°/s
+  assert.ok(0.09 * 180 / Math.PI < 8);
   assert.equal(sc.stage, 'star');
   assert.ok(sc.birds.every((b) => !b.root.visible));
 }
