@@ -292,11 +292,18 @@
 
   <footer>
     <a href="/terapeuta" class="therapist-link" target="_blank">🩺 Panel del Kinesiólogo (Tablet) →</a>
-    <div style="margin-top:10px; font-size:0.8rem; opacity:0.7;">Versión 0.10.4 · prototipo no validado clínicamente</div>
+    <div style="margin-top:10px; font-size:0.8rem; opacity:0.7;">Versión <span id="appVer">0.10.4</span> · prototipo no validado clínicamente</div>
   </footer>
 </main>
 
 <script type="module" src="./game.js"></script>
+<script type="module">
+  // Muestra la versión que de verdad está corriendo (la del juego), no solo la escrita en esta página.
+  import('./game.js').then((m) => {
+    const el = document.getElementById('appVer');
+    if (el && m.APP_VERSION && m.APP_VERSION !== el.textContent) { el.textContent = m.APP_VERSION + ' (página ' + el.textContent + ': recarga)'; el.style.color = '#b45309'; }
+  }).catch(() => {});
+</script>
 
 <script>
   (function() {
