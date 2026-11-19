@@ -92,3 +92,38 @@ export function perchAngles(rangeKey, n, rng = Math.random) {
 export function looking(yawDeg, targetDeg, tol = GAZE_TOLERANCE_DEG) {
   return Math.abs(yawDeg - targetDeg) <= tol;
 }
+
+/* ---------------- Vuelo de los pajaritos (se siguen con la mirada) ---------------- */
+
+// Margen técnico para "seguir" a un pajarito en movimiento (algo más amplio que para un punto quieto)
+export const FOLLOW_TOLERANCE_DEG = 12;
+// Tiempo acumulado siguiéndolo con la mirada para que se detenga a saludar (técnico, a confirmar en el Quest)
+export const FOLLOW_NEED_MS = 3000;
+
+// Recorrido suave de ida y vuelta, de lado a lado: nunca sale del rango de giro elegido.
+// t en segundos desde que el pajarito empezó a volar; idx cambia el ritmo y el lado de partida de cada pajarito.
+export function birdPath(t, rangeKey, idx = 0) {
+  const max = (NECK_RANGES[rangeKey] || NECK_RANGES[DEFAULT_NECK]).deg;
+  const amp = max * 0.85;
+  // Movimiento lento: la cabeza nunca necesita girar más rápido que ~15°/s (técnico, a confirmar en el Quest).
+  // Ida y vuelta completa en al menos 11 s; con rangos amplios, más lenta.
+  const period = Math.max(11, (2 * Math.PI * amp) / 15) + (idx % 3) * 1.5;
+  const dir = idx % 2 === 0 ? 1 : -1;
+  const yawDeg = dir * amp * Math.sin((2 * Math.PI * t) / period);
+  const yOff = 0.07 * Math.sin((4 * Math.PI * t) / period + idx); // sube y baja un poco
+  return { yawDeg, yOff, max };
+}
+
+// Estrella que vuela: lejos al exhalar, cerca al inhalar, flotando de lado a lado.
+// size: 0..1 (de breathAt). Devuelve la posición relativa (metros) frente al paciente.
+export const STAR_NEAR = 1.35; // técnico: distancia más cercana (al terminar de inhalar)
+export const STAR_FAR = 3.2; // técnico: distancia más lejana (al terminar de exhalar)
+export function starPose(size, t) {
+  const dist = STAR_FAR - (STAR_FAR - STAR_NEAR) * size;
+  const sway = 0.35 * (1 - size) + 0.1; // lejos se pasea más; cerca, casi quieta frente al paciente
+  return {
+    x: sway * Math.sin(t * 0.32),
+    y: 0.05 + 0.35 * (1 - size) * Math.max(0, Math.sin(t * 0.21 + 1)) + 0.04 * Math.sin(t * 0.9),
+    z: -dist,
+  };
+}

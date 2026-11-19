@@ -1,7 +1,7 @@
 // Pruebas del modo "Respira" (sin visor): node pruebas/test_respira.mjs
 import assert from 'node:assert/strict';
 import {
-  BREATH_PATTERNS, breathAt, cycleSecs, plan, perchAngles, NECK_RANGES, looking,
+  BREATH_PATTERNS, breathAt, cycleSecs, plan, perchAngles, NECK_RANGES, looking, birdPath, starPose, STAR_NEAR, STAR_FAR,
 } from '../respira_logica.js';
 
 // 1) Cada patrón: tramos en orden, tamaño de la estrella sube al inhalar y baja al exhalar
@@ -59,5 +59,34 @@ assert.ok(perchAngles('desconocido', 3).every((a) => Math.abs(a) <= 20), 'rango 
 // 4) Mirada
 assert.equal(looking(18, 20), true);
 assert.equal(looking(5, 20), false);
+
+// 5) El pajarito en vuelo nunca sale del rango de giro elegido, y sí recorre de lado a lado
+for (const [key, r] of Object.entries(NECK_RANGES)) {
+  for (let idx = 0; idx < 6; idx++) {
+    let mn = 0; let mx = 0;
+    for (let t = 0; t < 30; t += 0.05) {
+      const p = birdPath(t, key, idx);
+      assert.ok(Math.abs(p.yawDeg) <= r.deg + 1e-9, `${key}: vuelo fuera del rango`);
+      mn = Math.min(mn, p.yawDeg); mx = Math.max(mx, p.yawDeg);
+    }
+    assert.ok(mx > r.deg * 0.6 && mn < -r.deg * 0.6, 'el pajarito debe recorrer ambos lados');
+  }
+  // movimiento lento: no más de 20°/s
+  for (let t = 0; t < 20; t += 0.05) {
+    const v = Math.abs(birdPath(t + 0.05, key, 0).yawDeg - birdPath(t, key, 0).yawDeg) / 0.05;
+    assert.ok(v <= 20, `${key}: el pajarito se mueve muy rápido (${v.toFixed(1)}°/s)`);
+  }
+}
+
+// 6) La estrella se acerca al inhalar y se aleja al exhalar
+{
+  const lejos = starPose(0, 5); const cerca = starPose(1, 5);
+  assert.ok(Math.abs(lejos.z) > Math.abs(cerca.z));
+  assert.ok(Math.abs(cerca.z - -STAR_NEAR) < 1e-9 && Math.abs(lejos.z - -STAR_FAR) < 1e-9);
+  for (let t = 0; t < 60; t += 0.1) for (const sz of [0, 0.5, 1]) {
+    const p = starPose(sz, t);
+    assert.ok(Math.abs(p.x) < 0.5 && p.y > -0.1 && p.y < 0.5, 'la estrella se mantiene frente al paciente');
+  }
+}
 
 console.log('OK: pruebas de Respira');

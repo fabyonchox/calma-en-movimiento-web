@@ -3,6 +3,7 @@ import { FairScene } from './feria_escena.js';
 import { Guide, GuideVoice } from './guia.js';
 import { Sfx } from './sfx.js';
 import { BreathScene } from './respira.js';
+import { NatureAmbience } from './musica.js';
 import { grassTexture, barkTexture, leafTexture, stoneTexture, waterTexture, wickerTexture, softShadow, organicSphere, addClouds, addGrassTufts, tintGround } from './ambiente.js';
 import {
   DEFAULTS, ZONES, SIZES, MESSAGES, normalizeConfig, mergeConfig, REMOTE_KEYS, effectiveDistances, pickTarget,
@@ -2384,42 +2385,17 @@ function chime() {
   });
 }
 
-// Armónicos binaurales de calma tipo cuenco tibetano
+// Ambiente sonoro del jardín: brisa suave y pajaritos lejanos (antes era un zumbido grave constante,
+// que se sentía como un motor y ponía en alerta). En Respira se apaga y suena su propia música.
+let nature = null;
 function startAmbient() {
   if (!audioCtx || !S.cfg.ambient) return;
-  stopAmbient();
-  const g = audioCtx.createGain();
-  g.gain.value = 0.0001;
-  g.connect(audioCtx.destination);
-  const oscs = [[130.81, 0.45], [196.0, 0.3], [261.63, 0.15], [329.63, 0.08]].map(([f, a]) => {
-    const o = audioCtx.createOscillator();
-    const og = audioCtx.createGain();
-    o.type = 'sine';
-    o.frequency.value = f;
-    og.gain.value = a;
-    o.connect(og).connect(g);
-    o.start();
-    return o;
-  });
-  const lfo = audioCtx.createOscillator();
-  const lg = audioCtx.createGain();
-  lfo.frequency.value = 0.05; // ritmo de respiración lento (ondas theta de calma)
-  lg.gain.value = 0.012;
-  lfo.connect(lg).connect(g.gain);
-  lfo.start();
-  g.gain.exponentialRampToValueAtTime(0.038, audioCtx.currentTime + 3.5);
-  ambient = { g, oscs, lfo };
+  if (!nature) nature = new NatureAmbience(() => audioCtx);
+  nature.start();
 }
 
 function stopAmbient() {
-  if (!ambient || !audioCtx) { ambient = null; return; }
-  try {
-    const t = audioCtx.currentTime;
-    ambient.g.gain.cancelScheduledValues(t);
-    ambient.g.gain.setTargetAtTime(0.0001, t, 0.2);
-    ambient.oscs.concat([ambient.lfo]).forEach((o) => o.stop(t + 1));
-  } catch (e) { /* ya detenido */ }
-  ambient = null;
+  if (nature) nature.stop();
 }
 
 function update(dt, now) {
@@ -2549,6 +2525,10 @@ function update(dt, now) {
   // Respira: estrella y pajaritos solo mientras se juega; el jardín se atenúa a un atardecer suave y vuelve después.
   const breathOn = isBreath() && ['play', 'pause'].includes(S.phase);
   if (breathScene) breathScene.setVisible(breathOn);
+  if (nature && S.cfg && S.cfg.ambient && session) {
+    if (breathOn && nature.on) nature.stop();
+    else if (!breathOn && !nature.on) nature.start();
+  }
   duskTo(breathOn ? 1 : 0, dt);
 
   if (S.phase !== 'play') return;
@@ -2832,5 +2812,5 @@ function loop() {
 
 initForm();
 
-export const APP_VERSION = '0.10.2';
+export const APP_VERSION = '0.10.3';
 export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; } };

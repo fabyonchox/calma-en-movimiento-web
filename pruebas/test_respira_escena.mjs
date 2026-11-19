@@ -13,6 +13,7 @@ const ctx = {
   createGain: () => node({ gain: param() }),
   createBiquadFilter: () => node({ type: '', frequency: param(), Q: param() }),
   createOscillator: () => node({ type: '', frequency: param(), start() { started++; }, stop() {} }),
+  createDelay: () => node({ delayTime: param() }),
 };
 
 function run(cfg, gazeFn, secs) {
@@ -27,28 +28,32 @@ function run(cfg, gazeFn, secs) {
   sc.start(0);
   const dt = 1 / 72;
   const angles = [];
+  const starZ = [];
   for (let i = 0; i < secs / dt; i++) {
-    if (sc.perch.visible) angles.push(sc.perchAngle);
     sc.step(dt, gazeFn(sc));
+    if (sc.stage === 'birds' && sc.active_bird && sc.active_bird.state === 'roam' && typeof sc.birdYaw === 'number') angles.push(sc.birdYaw);
+    if (sc.stage === 'star') starZ.push(sc.starGroup.position.z);
   }
   sc.stop();
-  return { sc, events, angles };
+  return { sc, events, angles, starZ };
 }
 
 // 1) Estrella y luego pajaritos, mirando siempre hacia la luz
 {
   const cfg = { minutes: 3, breathContent: 'ambos', breathPattern: '4-6', neckRange: 'medio' };
-  const { sc, events, angles } = run(cfg, (s) => (s.stage === 'birds' ? { yawDeg: s.perchAngle, pitchDeg: 0 } : { yawDeg: 0, pitchDeg: 0 }), 180);
+  // El paciente sigue al pajarito con la mirada (con un pequeño retraso, como una persona real)
+  const { sc, events, angles, starZ } = run(cfg, (s) => (s.stage === 'birds' ? { yawDeg: (s.birdYaw || 0) * 0.9, pitchDeg: 0 } : { yawDeg: 0, pitchDeg: 0 }), 180);
+  assert.ok(Math.max(...starZ) - Math.min(...starZ) > 1.2, 'la estrella se acerca y se aleja (vuela)');
   assert.deepEqual(events.stages, ['star', 'birds']);
   assert.ok(events.cycles >= 10, 'respiraciones contadas: ' + events.cycles);
-  assert.ok(events.birds >= 5, 'pajaritos que llegaron: ' + events.birds);
+  assert.ok(events.birds >= 2, 'pajaritos que saludaron: ' + events.birds);
   assert.ok(events.words.slice(0, 2).join() === 'inhale,exhale', 'palabras: ' + events.words.slice(0, 4));
-  assert.ok(angles.every((a) => Math.abs(a) <= NECK_RANGES.medio.deg), 'ningún pajarito fuera del rango de giro');
+  assert.ok(angles.length > 100 && angles.every((a) => Math.abs(a) <= NECK_RANGES.medio.deg), 'ningún pajarito fuera del rango de giro');
   assert.ok(started > 0, 'la música sonó');
   assert.equal(sc.active, false);
 }
 
-// 2) Si el paciente no mira la luz, no llega ningún pajarito (y no pasa nada malo)
+// 2) Si el paciente no gira la cabeza (mira siempre al frente), ningún pajarito se detiene a saludar
 {
   const cfg = { minutes: 1, breathContent: 'pajaros', neckRange: 'suave' };
   const { events } = run(cfg, () => ({ yawDeg: 0, pitchDeg: 0 }), 60);
@@ -69,3 +74,4 @@ function run(cfg, gazeFn, secs) {
 }
 
 console.log('OK: escena de Respira');
+process.exit(0); // la música deja temporizadores activos

@@ -1,6 +1,7 @@
 // "Respira": escena de relajación (estrella que respira, luciérnagas, pajaritos que siguen la mirada) y música.
 // Estilo suave: formas redondeadas, sombreado liso, brillos difusos. Nada se mueve rápido ni se pega a la cabeza.
-import { breathAt, plan, perchAngles, looking, WORDS, cycleSecs } from './respira_logica.js';
+import { RelaxMusic } from './musica.js';
+import { breathAt, plan, looking, WORDS, cycleSecs, starPose, birdPath, FOLLOW_TOLERANCE_DEG, FOLLOW_NEED_MS } from './respira_logica.js';
 
 const DEG = Math.PI / 180;
 const BIRD_COLORS = [
@@ -53,6 +54,16 @@ export class BreathScene {
     this.starGroup.add(this.word);
     this.lastWord = '';
 
+    // Estela de chispas que deja la estrella al volar
+    this.trailN = 26;
+    this.trail = [];
+    const tpos = new Float32Array(this.trailN * 3);
+    const tg = new T.BufferGeometry();
+    tg.setAttribute('position', new T.BufferAttribute(tpos, 3));
+    this.trailGeo = tg;
+    this.trailPoints = new T.Points(tg, new T.PointsMaterial({ size: 0.07, map: this.glowTex, color: 0xffe2a0, transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0.7 }));
+    this.group.add(this.trailPoints);
+
     // --- Luciérnagas: suben al inhalar, bajan al exhalar ---
     const N = 70;
     const pos = new Float32Array(N * 3);
@@ -75,19 +86,15 @@ export class BreathScene {
     this.group.add(this.birdGroup);
     this.birds = BIRD_COLORS.map((c) => this.makeBird(c));
     this.birds.forEach((b) => { b.root.visible = false; this.birdGroup.add(b.root); });
-    // Punto de luz donde se posará el pajarito + anillo que se llena al mirarlo
-    this.perch = new T.Group();
-    const perchGlow = new T.Sprite(new T.SpriteMaterial({ map: this.glowTex, color: 0xbfe8ff, transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0.8 }));
-    perchGlow.scale.setScalar(0.35);
-    this.perch.add(perchGlow);
-    this.perchBranch = new T.Mesh(new T.CapsuleGeometry(0.012, 0.28, 6, 12), new T.MeshStandardMaterial({ color: 0x9a7b5b, roughness: 0.8 }));
-    this.perchBranch.rotation.z = Math.PI / 2;
-    this.perchBranch.position.y = -0.1;
-    this.perch.add(this.perchBranch);
-    this.fillRing = new T.Mesh(new T.RingGeometry(0.15, 0.17, 64, 1, 0, 0.001), new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, side: T.DoubleSide, depthWrite: false }));
-    this.perch.add(this.fillRing);
-    this.perch.visible = false;
-    this.group.add(this.perch);
+    // Anillo suave alrededor del pajarito: se va llenando mientras el paciente lo sigue con la mirada
+    this.follow = new T.Group();
+    const track = new T.Mesh(new T.RingGeometry(0.17, 0.18, 64), new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18, side: T.DoubleSide, depthWrite: false }));
+    this.follow.add(track);
+    this.fillRing = new T.Mesh(new T.RingGeometry(0.165, 0.185, 64, 1, 0, 0.001), new T.MeshBasicMaterial({ color: 0xfff3c4, transparent: true, opacity: 0.85, side: T.DoubleSide, depthWrite: false }));
+    this.follow.add(this.fillRing);
+    this.follow.visible = false;
+    this.group.add(this.follow);
+    this.fillShown = -1;
   }
 
   makeBird(c) {
@@ -128,7 +135,8 @@ export class BreathScene {
   configure(cfg, eyeH) {
     this.cfg = cfg;
     this.eyeH = eyeH || 1.15;
-    this.starGroup.position.set(0, this.eyeH + 0.05, -1.7);
+    const p = starPose(0, 0);
+    this.starGroup.position.set(p.x, this.eyeH + p.y, p.z);
   }
 
   setVisible(v) { this.group.visible = !!v; }
@@ -142,23 +150,23 @@ export class BreathScene {
     this.stage = this.plan.star > 0 ? 'star' : 'birds';
     this.cycles = 0;
     this.birdsDone = 0;
-    this.angles = perchAngles(c.neckRange, 40);
-    this.perchIdx = 0;
+    this.birdIdx = 0;
     this.gazeMs = 0;
-    this.birdTarget = null;
+    this.trail = [];
     this.starGroup.visible = this.stage === 'star';
+    this.trailPoints.visible = this.stage === 'star';
     this.birds.forEach((b) => { b.root.visible = false; b.state = 'idle'; });
-    this.perch.visible = false;
+    this.follow.visible = false;
     this.lastWord = '';
     if (this.host.musicOn()) this.music.start();
     this.host.onStage && this.host.onStage(this.stage);
-    if (this.stage === 'birds') this.nextPerch();
+    if (this.stage === 'birds') this.nextBird();
   }
 
   stop() {
     this.active = false;
     this.music.stop();
-    this.perch.visible = false;
+    this.follow.visible = false;
     this.birds.forEach((b) => { b.root.visible = false; });
   }
 
@@ -175,8 +183,9 @@ export class BreathScene {
         // termina al completar la respiración en curso (plan.star ya son ciclos completos)
         this.stage = 'birds';
         this.starGroup.visible = false;
+        this.trailPoints.visible = false;
         this.host.onStage && this.host.onStage('birds');
-        this.nextPerch();
+        this.nextBird();
       }
     } else {
       this.stepBirds(dt, gaze);
@@ -186,9 +195,14 @@ export class BreathScene {
   }
 
   drawStar(b) {
-    const s = 0.62 + 0.45 * b.size;
+    // La estrella VUELA: al inhalar se acerca, al exhalar se aleja flotando (ver starPose).
+    const p = starPose(b.size, this.elapsed);
+    this.starGroup.position.set(p.x, this.eyeH + p.y, p.z);
+    this.starGroup.lookAt(0, this.eyeH, 0);
+    this.updateTrail();
+    const s = 0.8 + 0.3 * b.size;
     this.star.scale.setScalar(s);
-    this.star.rotation.z += 0.0015;
+    this.star.rotation.z += 0.004 + 0.01 * (1 - b.size); // gira más al alejarse
     this.starMat.emissiveIntensity = 0.35 + 0.65 * b.size;
     this.halo.scale.setScalar(0.7 + 0.6 * b.size);
     this.halo.material.opacity = 0.18 + 0.3 * b.size;
@@ -201,6 +215,21 @@ export class BreathScene {
       this.drawWord(w);
       this.host.onWord && this.host.onWord(b.name);
     }
+  }
+
+  // Estela: guarda las últimas posiciones de la estrella y las dibuja como chispas que se desvanecen
+  updateTrail() {
+    const g = this.starGroup.position;
+    this.trail.unshift({ x: g.x, y: g.y, z: g.z });
+    if (this.trail.length > this.trailN) this.trail.length = this.trailN;
+    const a = this.trailGeo.attributes.position;
+    for (let i = 0; i < this.trailN; i++) {
+      const q = this.trail[Math.min(i * 2, this.trail.length - 1)] || g;
+      a.array[i * 3] = q.x + Math.sin(i * 1.7 + this.elapsed) * 0.012 * i;
+      a.array[i * 3 + 1] = q.y - 0.004 * i;
+      a.array[i * 3 + 2] = q.z;
+    }
+    a.needsUpdate = true;
   }
 
   drawWord(text) {
@@ -230,84 +259,129 @@ export class BreathScene {
 
   /* ----- Pajaritos ----- */
 
-  perchPos(angleDeg) {
-    const r = 1.5;
-    const a = angleDeg * DEG;
-    return { x: Math.sin(a) * r, y: this.eyeH + 0.05, z: -Math.cos(a) * r };
+  // Posición en el vuelo de ida y vuelta (a 1,6 m, frente al paciente, dentro del rango de giro)
+  pathPos(bird, t) {
+    const p = birdPath(t, (this.cfg || {}).neckRange, bird.idx);
+    const a = p.yawDeg * DEG;
+    const r = 1.6;
+    return { x: Math.sin(a) * r, y: this.eyeH + 0.05 + p.yOff, z: -Math.cos(a) * r, yawDeg: p.yawDeg };
   }
 
-  nextPerch() {
-    const ang = this.angles[this.perchIdx % this.angles.length];
-    this.perchIdx++;
-    this.perchAngle = ang;
-    const p = this.perchPos(ang);
-    this.perch.position.set(p.x, p.y, p.z);
-    this.perch.lookAt(0, this.eyeH, 0);
-    this.perch.visible = true;
+  nextBird() {
+    const bird = this.birds[this.birdIdx % this.birds.length];
+    bird.idx = this.birdIdx++;
+    bird.state = 'enter';
+    bird.t = 0;
+    bird.pathT = 0;
+    const to = this.pathPos(bird, 0);
+    const side = bird.idx % 2 === 0 ? -1 : 1;
+    bird.from = { x: side * 2.6, y: this.eyeH + 0.9, z: -2.6 };
+    bird.to = to;
+    bird.root.visible = true;
+    bird.root.rotation.set(0, 0, 0);
+    bird.root.position.set(bird.from.x, bird.from.y, bird.from.z);
     this.gazeMs = 0;
     this.setFill(0);
+    this.follow.visible = false;
+    this.active_bird = bird;
   }
 
   setFill(f) {
+    const k = Math.round(f * 60) / 60;
+    if (k === this.fillShown) return;
+    this.fillShown = k;
     const T = this.T;
     const old = this.fillRing.geometry;
-    this.fillRing.geometry = new T.RingGeometry(0.15, 0.17, 64, 1, Math.PI / 2, -Math.max(0.001, f) * Math.PI * 2);
+    this.fillRing.geometry = new T.RingGeometry(0.165, 0.185, 64, 1, Math.PI / 2, -Math.max(0.001, k) * Math.PI * 2);
     old.dispose();
   }
 
   stepBirds(dt, gaze) {
-    // Pajarito volando hacia la rama
-    const flying = this.birds.find((b) => b.state === 'flying');
-    if (flying) {
-      flying.t += dt / 2.4;
-      const k = Math.min(1, flying.t);
+    const bird = this.active_bird;
+    if (!bird) return;
+    bird.t += dt;
+    const pos = bird.root.position;
+
+    if (bird.state === 'enter') {
+      // Llega volando desde un costado hasta el comienzo de su recorrido
+      const k = Math.min(1, bird.t / 2.5);
       const e = k * k * (3 - 2 * k);
-      const a = flying.from; const b = flying.to;
-      const arc = Math.sin(Math.PI * k) * 0.35;
-      flying.root.position.set(a.x + (b.x - a.x) * e, a.y + (b.y - a.y) * e + arc, a.z + (b.z - a.z) * e);
-      flying.root.lookAt(b.x, flying.root.position.y, b.z);
-      this.flap(flying, 14, 0.9);
-      if (k >= 1) {
-        flying.state = 'perched';
-        flying.perchT = 0;
-        flying.root.lookAt(0, this.eyeH, 0);
+      const a = bird.from; const b = bird.to;
+      pos.set(a.x + (b.x - a.x) * e, a.y + (b.y - a.y) * e + Math.sin(Math.PI * k) * 0.25, a.z + (b.z - a.z) * e);
+      bird.root.lookAt(b.x, pos.y, b.z);
+      this.flap(bird, 14, 0.9);
+      if (k >= 1) { bird.state = 'roam'; bird.t = 0; bird.pathT = 0; }
+      return;
+    }
+
+    if (bird.state === 'roam') {
+      // Vuela de lado a lado sin parar; el paciente lo sigue girando suavemente la cabeza
+      bird.pathT += dt;
+      const p = this.pathPos(bird, bird.pathT);
+      const nx = this.pathPos(bird, bird.pathT + 0.15);
+      pos.set(p.x, p.y, p.z);
+      bird.root.lookAt(nx.x, nx.y, nx.z);
+      this.flap(bird, 10, 0.75);
+      this.birdYaw = p.yawDeg;
+      // Anillo de seguimiento junto al pajarito, mirando al paciente
+      this.follow.visible = true;
+      this.follow.position.set(p.x, p.y + 0.005, p.z);
+      this.follow.lookAt(0, this.eyeH, 0);
+      // Solo cuenta cuando el pajarito está hacia un lado (así de verdad hay que girar la cabeza)
+      const away = Math.abs(p.yawDeg) >= FOLLOW_TOLERANCE_DEG;
+      const following = !!gaze && looking(gaze.yawDeg, p.yawDeg, FOLLOW_TOLERANCE_DEG);
+      if (following && away) this.gazeMs += dt * 1000;
+      else if (!following) this.gazeMs = Math.max(0, this.gazeMs - dt * 400);
+      this.setFill(Math.min(1, this.gazeMs / FOLLOW_NEED_MS));
+      if (this.gazeMs >= FOLLOW_NEED_MS) {
+        // ¡Lo acompañó! El pajarito se detiene, mira al paciente y lo saluda
+        bird.state = 'greet';
+        bird.t = 0;
+        bird.greetPos = { x: p.x, y: p.y, z: p.z };
+        this.follow.visible = false;
         this.birdsDone++;
-        if (this.host.sfx) this.host.sfx.birdChirp(b.x);
+        if (this.host.sfx) this.host.sfx.birdChirp(p.x);
         this.host.onBird && this.host.onBird(this.birdsDone);
       }
       return;
     }
-    // Pajarito posado: se queda un rato, canta y luego se va volando suave
-    const perched = this.birds.find((b) => b.state === 'perched');
-    if (perched) {
-      perched.perchT += dt;
-      this.flap(perched, 1.2, 0.08);
-      perched.root.rotation.z = Math.sin(perched.perchT * 2) * 0.05;
-      if (perched.perchT > 3) {
-        perched.state = 'idle';
-        perched.root.visible = false;
-        this.nextPerch();
+
+    if (bird.state === 'greet') {
+      // Se queda tranquilo frente al paciente: un saltito, saluda con un ala e inclina la cabeza
+      const t = bird.t;
+      const g = bird.greetPos;
+      const hop = t < 1.2 ? Math.abs(Math.sin(t * 7)) * 0.035 * (1 - t / 1.2) : 0;
+      pos.set(g.x, g.y + hop, g.z);
+      bird.root.lookAt(0, this.eyeH, 0);
+      bird.root.rotateZ(Math.sin(t * 2.2) * 0.18); // inclina la cabeza
+      if (t > 0.9 && t < 2.8) {
+        bird.wings[0].rotation.z = 0.15;
+        bird.wings[1].rotation.z = -0.4 - 0.7 * Math.abs(Math.sin((t - 0.9) * 6)); // saludo con un ala
+      } else {
+        this.flap(bird, 2, 0.1);
+      }
+      if (t > 1.6 && !bird.secondChirp) { bird.secondChirp = true; if (this.host.sfx) this.host.sfx.birdChirp(g.x); }
+      if (t > 3.6) {
+        bird.state = 'leave'; bird.t = 0; bird.secondChirp = false;
+        bird.from = { ...g };
+        const out = g.x >= 0 ? 1 : -1;
+        bird.to = { x: g.x + out * 2.2, y: g.y + 1.3, z: g.z - 2.4 };
       }
       return;
     }
-    // Esperando la mirada: la cabeza debe apuntar a la luz un momento (se llena el anillo)
-    if (!this.perch.visible || !gaze) return;
-    if (looking(gaze.yawDeg, this.perchAngle)) this.gazeMs += dt * 1000;
-    else this.gazeMs = Math.max(0, this.gazeMs - dt * 600);
-    const need = 1500;
-    this.setFill(Math.min(1, this.gazeMs / need));
-    if (this.gazeMs >= need) {
-      this.perch.visible = false;
-      const bird = this.birds[this.birdsDone % this.birds.length];
-      const to = this.perchPos(this.perchAngle);
-      to.y -= 0.02; // queda posado sobre la rama
-      const side = this.perchAngle >= 0 ? 1 : -1;
-      bird.from = { x: to.x + side * 1.6, y: to.y + 0.9, z: to.z - 1.4 };
-      bird.to = to;
-      bird.t = 0;
-      bird.state = 'flying';
-      bird.root.visible = true;
-      bird.root.position.set(bird.from.x, bird.from.y, bird.from.z);
+
+    if (bird.state === 'leave') {
+      const k = Math.min(1, bird.t / 2.2);
+      const e = k * k;
+      const a = bird.from; const b = bird.to;
+      pos.set(a.x + (b.x - a.x) * e, a.y + (b.y - a.y) * e, a.z + (b.z - a.z) * e);
+      bird.root.lookAt(b.x, b.y, b.z);
+      this.flap(bird, 14, 0.9);
+      if (k >= 1) {
+        bird.state = 'idle';
+        bird.root.visible = false;
+        this.nextBird();
+      }
     }
   }
 
@@ -320,85 +394,6 @@ export class BreathScene {
 
   // Para la tablet y las pruebas
   summary() { return { stage: this.stage, cycles: this.cycles, birds: this.birdsDone, cycleSecs: cycleSecs((this.cfg || {}).breathPattern) }; }
-}
-
-/* ================= Música de relajación (generada, sin archivos) ================= */
-
-export class RelaxMusic {
-  constructor(getCtx) { this.getCtx = getCtx; this.on = false; this.timer = null; }
-
-  start() {
-    const c = this.getCtx && this.getCtx();
-    if (!c || this.on) return;
-    this.on = true;
-    this.c = c;
-    this.master = c.createGain();
-    this.master.gain.setValueAtTime(0.0001, c.currentTime);
-    this.master.gain.exponentialRampToValueAtTime(0.12, c.currentTime + 4);
-    this.filter = c.createBiquadFilter();
-    this.filter.type = 'lowpass';
-    this.filter.frequency.value = 900;
-    this.filter.connect(this.master).connect(c.destination);
-    // Progresión lenta y luminosa (Do mayor 7 → La menor 7 → Fa mayor 7 → Sol sus)
-    this.chords = [[130.81, 196.0, 246.94, 329.63], [110.0, 164.81, 196.0, 261.63], [87.31, 130.81, 164.81, 220.0], [98.0, 146.83, 196.0, 261.63]];
-    this.ci = 0;
-    this.playChord();
-    this.timer = setInterval(() => this.playChord(), 9000);
-  }
-
-  playChord() {
-    const c = this.c; if (!c || !this.on) return;
-    const t = c.currentTime;
-    const notes = this.chords[this.ci++ % this.chords.length];
-    notes.forEach((f, i) => {
-      [0, 1].forEach((d) => {
-        const o = c.createOscillator();
-        o.type = d ? 'triangle' : 'sine';
-        o.frequency.value = f * (d ? 1.003 : 1);
-        const g = c.createGain();
-        const v = 0.05 / (i + 1.4) / (d ? 2 : 1);
-        g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(v, t + 3);
-        g.gain.setValueAtTime(v, t + 7);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 11.5);
-        o.connect(g).connect(this.filter);
-        o.start(t); o.stop(t + 12);
-      });
-    });
-    // De vez en cuando, un cuenco suave
-    if (this.ci % 2 === 0) this.bowl(t + 1.5, notes[0] * 4);
-  }
-
-  bowl(t, f) {
-    const c = this.c;
-    [1, 2.71, 5.15].forEach((m, i) => {
-      const o = c.createOscillator(); o.type = 'sine'; o.frequency.value = f * m;
-      const g = c.createGain();
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.exponentialRampToValueAtTime(0.03 / (i + 1), t + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 6 - i);
-      o.connect(g).connect(this.master);
-      o.start(t); o.stop(t + 6.2);
-    });
-  }
-
-  // La música "respira" con la estrella: se abre un poco al inhalar
-  breath(size) {
-    if (!this.on || !this.filter) return;
-    try { this.filter.frequency.setTargetAtTime(700 + 900 * size, this.c.currentTime, 0.4); } catch (e) { /* ok */ }
-  }
-
-  stop() {
-    if (this.timer) clearInterval(this.timer);
-    this.timer = null;
-    if (!this.on) return;
-    this.on = false;
-    try {
-      const t = this.c.currentTime;
-      this.master.gain.cancelScheduledValues(t);
-      this.master.gain.setTargetAtTime(0.0001, t, 0.8);
-    } catch (e) { /* ok */ }
-  }
 }
 
 /* ================= utilidades ================= */
@@ -447,3 +442,5 @@ function glowTexture(T) {
   const tex = new T.CanvasTexture(c);
   return tex;
 }
+
+export { RelaxMusic };
