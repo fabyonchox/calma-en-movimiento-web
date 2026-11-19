@@ -382,7 +382,8 @@
   .rb-state[data-on="-1"] { background: var(--danger-light); color: var(--danger); border-color: transparent; }
   .rb-ver { font-size: 0.82rem; font-weight: 700; color: var(--muted); }
   .rb-reload { font: inherit; font-size: 0.85rem; font-weight: 700; border-radius: 999px; padding: 6px 14px; border: 1px solid var(--warn-line); background: #fff; color: var(--warn); cursor: pointer; min-height: 40px; }
-  .rb-reload[hidden] { display: none; }
+  .rb-reload[hidden], .rb-two[hidden] { display: none; }
+  .rb-two { flex-basis: 100%; margin: 6px 0 0; font-size: 0.9rem; font-weight: 600; color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 12px; padding: 8px 12px; }
   .rb-reload:disabled { opacity: 0.55; cursor: not-allowed; }
   .rb-ver[data-warn="1"] { color: var(--warn); background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 999px; padding: 4px 12px; }
   .rb-pills { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -464,6 +465,7 @@
       <span class="rb-state" id="rbState" data-on="0">Esperando visor… ⏳</span>
       <span class="rb-ver" id="rbVer" data-warn="0"></span>
       <button type="button" class="rb-reload" id="rbReload" hidden>🔄 Recargar visor</button>
+      <p class="rb-two" id="rbTwo" hidden>⚠ Parece que hay <b>dos visores</b> conectados a este casco y se están turnando la conexión. Cierra el juego en los otros equipos o pestañas (Quest, computador, otro visor), o elige otro casco aquí y en el visor.</p>
     </div>
     <div class="rb-pills" role="group" aria-label="Elegir casco">
       <button type="button" class="rb-pill" data-room="HOSPITAL-1">🎧 Casco 1</button>
@@ -733,7 +735,7 @@
   </main>
 </div>
 
-<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.10.4 · prototipo no validado clínicamente</p>
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.10.5 · prototipo no validado clínicamente</p>
 <script type="module" src="./terapeuta.js"></script>
 <script>
 if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); }); }

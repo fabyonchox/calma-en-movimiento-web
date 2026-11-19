@@ -2,7 +2,7 @@ import { getSyncServerUrl, getSessionCode } from './sync-config.js';
 import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure } from './logic.js';
 import { PatientsPanel } from './pacientes.js';
 
-const APP_VERSION = '0.10.4';
+const APP_VERSION = '0.10.5';
 
 let ws = null;
 let currentRoom = getSessionCode() || 'HOSPITAL-1';
@@ -217,7 +217,25 @@ function setServerState(state) {
   }
 }
 
+// Detección de dos visores en el mismo casco: el servidor deja entrar a uno y bota al otro, y se turnan.
+// Se nota porque el visor se conecta y desconecta seguido, o porque llegan versiones distintas.
+const flapLog = []; // [tiempo, 'conecta' | 'version:x.y.z']
+function noteFlap(tag) {
+  const t = Date.now();
+  flapLog.push([t, tag]);
+  while (flapLog.length && t - flapLog[0][0] > 90000) flapLog.shift();
+}
+function twoHeadsetsSuspected() {
+  const reconnects = flapLog.filter(([, k]) => k === 'conecta').length;
+  // Versiones que se alternan (A → B → A). Un solo cambio A → B es normal: el visor se actualizó.
+  const seq = [];
+  flapLog.forEach(([, k]) => { if (k.startsWith('version:') && seq[seq.length - 1] !== k) seq.push(k); });
+  const alternating = seq.some((k, i) => i >= 2 && seq[i - 2] === k);
+  return alternating || reconnects >= 4;
+}
+
 function setHeadsetState(online) {
+  if (online && !isHeadsetOnline) noteFlap('conecta');
   isHeadsetOnline = online;
   updateRoomBanner();
   if (online) {
@@ -487,6 +505,7 @@ function triggerRemoteButton(buttonId) {
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
 function renderMetrics(m) {
+  if (m && m.version) noteFlap('version:' + m.version);
   Object.assign(currentMetrics, m);
   const cm = currentMetrics;
 
@@ -807,10 +826,13 @@ function updateRoomBanner() {
     else if (currentMetrics.version === APP_VERSION) { ver.textContent = 'Visor v' + APP_VERSION; ver.dataset.warn = '0'; }
     else { ver.textContent = '⚠ Visor desactualizado' + (currentMetrics.version ? ' (v' + currentMetrics.version + ')' : ''); ver.dataset.warn = '1'; }
   }
+  // Aviso de dos visores en el mismo casco (más importante que la versión: recargar no lo arregla)
+  const two = $('rbTwo');
+  if (two) two.hidden = !twoHeadsetsSuspected();
   // Botón para actualizar el visor desde aquí (solo cuando no hay un juego ni una encuesta en curso)
   const rb = $('rbReload');
   if (rb) {
-    const outdated = ver && ver.dataset.warn === '1';
+    const outdated = ver && ver.dataset.warn === '1' && !twoHeadsetsSuspected();
     rb.hidden = !outdated;
     const ok = RELOAD_OK_PHASES.includes(currentPhase);
     rb.disabled = !ok;
