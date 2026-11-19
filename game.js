@@ -2291,7 +2291,12 @@ function headGaze() {
   camera.getWorldQuaternion(_gq.a);
   anchor.getWorldQuaternion(_gq.b).invert();
   const d = _gq.v.set(0, 0, -1).applyQuaternion(_gq.a).applyQuaternion(_gq.b);
-  return { yawDeg: Math.atan2(d.x, -d.z) * 180 / Math.PI, pitchDeg: Math.asin(Math.max(-1, Math.min(1, d.y))) * 180 / Math.PI };
+  const out = { yawDeg: Math.atan2(d.x, -d.z) * 180 / Math.PI, pitchDeg: Math.asin(Math.max(-1, Math.min(1, d.y))) * 180 / Math.PI };
+  // Posición de la cabeza en coordenadas del jardín (para medir hacia dónde está cada pajarito desde los ojos del paciente)
+  if (!_gq.p) _gq.p = new THREE.Vector3();
+  camera.getWorldPosition(_gq.p); anchor.worldToLocal(_gq.p);
+  out.pos = { x: _gq.p.x, y: _gq.p.y, z: _gq.p.z };
+  return out;
 }
 
 const DAY = { bg: 0xd2ebed, hemi: 1.15, sun: 0.95 };
@@ -2839,5 +2844,5 @@ function loop() {
 
 initForm();
 
-export const APP_VERSION = '0.10.5';
+export const APP_VERSION = '0.10.6';
 export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; } };

@@ -16,8 +16,10 @@ const ctx = {
   createDelay: () => node({ delayTime: param() }),
 };
 
-function run(cfg, gazeFn, secs) {
+function run(cfg, gazeFn, secs, setupAnchor) {
   const anchor = new THREE.Group();
+  if (setupAnchor) setupAnchor(anchor);
+  const scene = new THREE.Scene(); scene.add(anchor);
   const events = { cycles: 0, birds: 0, stages: [], words: [] };
   const sc = new BreathScene(THREE, anchor, {
     audioCtx: () => ctx, musicOn: () => true, sfx: { birdChirp() {} },
@@ -29,13 +31,23 @@ function run(cfg, gazeFn, secs) {
   const dt = 1 / 72;
   const angles = [];
   const starZ = [];
+  const facing = []; // en vuelo: ¿la carita del pajarito apunta hacia el paciente? (producto punto > 0)
+  let saidSomething = false;
   for (let i = 0; i < secs / dt; i++) {
     sc.step(dt, gazeFn(sc));
     if (sc.stage === 'birds' && sc.active_bird && sc.active_bird.state === 'roam' && typeof sc.birdYaw === 'number') angles.push(sc.birdYaw);
     if (sc.stage === 'star') starZ.push(sc.starGroup.position.z);
+    const b = sc.active_bird;
+    if (b && b.state === 'roam') {
+      const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(b.root.getWorldQuaternion(new THREE.Quaternion()));
+      const bp = b.root.getWorldPosition(new THREE.Vector3());
+      const head = anchor.localToWorld(new THREE.Vector3(0, 1.15, 0));
+      facing.push(fwd.dot(head.sub(bp).normalize()));
+    }
+    if (sc.say.visible) saidSomething = true;
   }
   sc.stop();
-  return { sc, events, angles, starZ };
+  return { sc, events, angles, starZ, facing, saidSomething };
 }
 
 // 1) Estrella y luego pajaritos, mirando siempre hacia la luz
@@ -71,6 +83,24 @@ function run(cfg, gazeFn, secs) {
   assert.ok(Math.max(...sizes) - Math.min(...sizes) > 0.3, 'la estrella cambia de tamaño');
   assert.equal(sc.stage, 'star');
   assert.ok(sc.birds.every((b) => !b.root.visible));
+}
+
+// 4) Jardín girado y desplazado (como tras recentrar): el pajarito nunca da la espalda y saluda con su globo
+{
+  const cfg = { minutes: 1, breathContent: 'pajaros', neckRange: 'medio' };
+  const { events, facing, saidSomething } = run(cfg, (s) => ({ yawDeg: (s.birdYaw || 0) * 0.8, pitchDeg: 0 }), 60,
+    (a) => { a.position.set(1.3, 0, -0.7); a.rotation.y = 2.1; });
+  assert.ok(facing.length > 100 && facing.every((d) => d > 0.3), 'el pajarito mira hacia el paciente (mín ' + Math.min(...facing).toFixed(2) + ')');
+  assert.ok(events.birds >= 2, 'saludaron: ' + events.birds);
+  assert.ok(saidSomething, 'el pajarito muestra su saludo');
+}
+
+// 5) Cabeza quieta con un pequeño temblor natural: no llena el anillo
+{
+  const cfg = { minutes: 1, breathContent: 'pajaros', neckRange: 'suave' };
+  let t = 0;
+  const { events } = run(cfg, () => { t += 1 / 72; return { yawDeg: 0.6 * Math.sin(t * 9), pitchDeg: 0 }; }, 60);
+  assert.equal(events.birds, 0, 'mirar al frente no cuenta');
 }
 
 console.log('OK: escena de Respira');
