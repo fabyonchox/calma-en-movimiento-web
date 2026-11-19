@@ -1,7 +1,8 @@
 // "Respira": escena de relajación (estrella que respira, luciérnagas, pajaritos que siguen la mirada) y música.
 // Estilo suave: formas redondeadas, sombreado liso, brillos difusos. Nada se mueve rápido ni se pega a la cabeza.
 import { RelaxMusic } from './musica.js';
-import { breathAt, plan, looking, WORDS, cycleSecs, starPose, birdPath, FOLLOW_TOLERANCE_DEG, FOLLOW_NEED_MS } from './respira_logica.js';
+import { breathAt, plan, WORDS, cycleSecs, starPose, birdPath, followCredit, FOLLOW_LAG_SECS, FOLLOW_NEED_MS, BIRD_GREETINGS } from './respira_logica.js';
+import { FONT } from './guia.js';
 
 const DEG = Math.PI / 180;
 const BIRD_COLORS = [
@@ -95,6 +96,52 @@ export class BreathScene {
     this.follow.visible = false;
     this.group.add(this.follow);
     this.fillShown = -1;
+    // Globo de diálogo del pajarito (aparece cuando saluda)
+    this.sayCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : { width: 640, height: 260 };
+    this.sayCanvas.width = 640; this.sayCanvas.height = 260;
+    this.sayTex = new T.CanvasTexture(this.sayCanvas);
+    if ('colorSpace' in this.sayTex) this.sayTex.colorSpace = T.SRGBColorSpace;
+    this.say = new T.Mesh(new T.PlaneGeometry(0.78, 0.317), new T.MeshBasicMaterial({ map: this.sayTex, transparent: true, depthWrite: false, side: T.DoubleSide }));
+    this.say.visible = false;
+    this.say.renderOrder = 5;
+    this.group.add(this.say);
+    this._v = new T.Vector3();
+  }
+
+  // lookAt de three.js usa coordenadas del mundo; el jardín puede estar girado o desplazado (recentrar),
+  // así que se convierte el punto desde las coordenadas del jardín antes de mirar.
+  faceLocal(obj, x, y, z) {
+    const v = this._v.set(x, y, z);
+    this.group.localToWorld(v);
+    obj.lookAt(v);
+  }
+
+  // Dónde está la cabeza del paciente (coordenadas del jardín). Si no se sabe, al centro.
+  headPos(gaze) {
+    return gaze && gaze.pos ? gaze.pos : { x: 0, y: this.eyeH, z: 0 };
+  }
+
+  // Ángulo del pajarito visto desde la cabeza (grados; positivo = derecha)
+  yawFromHead(h, p) { return Math.atan2(p.x - h.x, -(p.z - h.z)) / DEG; }
+
+  drawSay(text) {
+    const c = this.sayCanvas; const g = c.getContext && c.getContext('2d');
+    if (!g) return;
+    g.clearRect(0, 0, c.width, c.height);
+    const r = 60; const w = c.width - 12; const h = c.height - 56;
+    g.fillStyle = 'rgba(255,253,244,0.97)'; g.strokeStyle = '#ffd77a'; g.lineWidth = 8;
+    g.beginPath(); g.moveTo(6 + r, 6); g.arcTo(6 + w, 6, 6 + w, 6 + h, r); g.arcTo(6 + w, 6 + h, 6, 6 + h, r);
+    g.lineTo(c.width / 2 + 26, 6 + h); g.lineTo(c.width / 2, c.height - 8); g.lineTo(c.width / 2 - 26, 6 + h);
+    g.arcTo(6, 6 + h, 6, 6, r); g.arcTo(6, 6, 6 + w, 6, r); g.closePath(); g.fill(); g.stroke();
+    let size = 76;
+    g.font = '700 ' + size + 'px ' + FONT;
+    while (g.measureText(text).width > w - 70 && size > 40) { size -= 4; g.font = '700 ' + size + 'px ' + FONT; }
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    const grd = g.createLinearGradient(0, 30, 0, h);
+    grd.addColorStop(0, '#f08a5d'); grd.addColorStop(1, '#d9577a');
+    g.lineJoin = 'round'; g.lineWidth = 12; g.strokeStyle = '#ffffff'; g.strokeText(text, c.width / 2, 6 + h / 2 + 4);
+    g.fillStyle = grd; g.fillText(text, c.width / 2, 6 + h / 2 + 4);
+    this.sayTex.needsUpdate = true;
   }
 
   makeBird(c) {
@@ -157,6 +204,8 @@ export class BreathScene {
     this.trailPoints.visible = this.stage === 'star';
     this.birds.forEach((b) => { b.root.visible = false; b.state = 'idle'; });
     this.follow.visible = false;
+    this.say.visible = false;
+    this.headSpeed = 0; this.yawHist = []; this.histT = 0;
     this.lastWord = '';
     if (this.host.musicOn()) this.music.start();
     this.host.onStage && this.host.onStage(this.stage);
@@ -168,12 +217,14 @@ export class BreathScene {
     this.music.stop();
     this.follow.visible = false;
     this.birds.forEach((b) => { b.root.visible = false; });
+    if (this.say) this.say.visible = false;
   }
 
   // dt en s; gaze = { yawDeg, pitchDeg } de la cabeza en coordenadas del jardín
   step(dt, gaze) {
     if (!this.active) return;
     this.elapsed += dt;
+    this.group.updateMatrixWorld(true);
     const c = this.cfg || {};
     if (this.stage === 'star') {
       const b = breathAt(this.elapsed, c.breathPattern);
@@ -198,7 +249,7 @@ export class BreathScene {
     // La estrella VUELA: al inhalar se acerca, al exhalar se aleja flotando (ver starPose).
     const p = starPose(b.size, this.elapsed);
     this.starGroup.position.set(p.x, this.eyeH + p.y, p.z);
-    this.starGroup.lookAt(0, this.eyeH, 0);
+    this.faceLocal(this.starGroup, 0, this.eyeH, 0);
     this.updateTrail();
     const s = 0.8 + 0.3 * b.size;
     this.star.scale.setScalar(s);
@@ -300,15 +351,27 @@ export class BreathScene {
     const bird = this.active_bird;
     if (!bird) return;
     bird.t += dt;
+    this.group.updateMatrixWorld(true);
     const pos = bird.root.position;
+    const h = this.headPos(gaze);
+    // Rapidez de giro de la cabeza, medida como cuánto avanzó en el último medio segundo: así un temblor
+    // pequeño (va y vuelve) no cuenta, y acompañar el vuelo (avanza hacia un lado) sí.
+    if (gaze) {
+      const hist = this.yawHist || (this.yawHist = []);
+      this.histT = (this.histT || 0) + dt;
+      hist.push([this.histT, gaze.yawDeg]);
+      while (hist.length > 2 && this.histT - hist[1][0] >= 0.5) hist.shift();
+      const span = this.histT - hist[0][0];
+      this.headSpeed = span > 0.2 ? Math.abs(gaze.yawDeg - hist[0][1]) / span : 0;
+    }
 
     if (bird.state === 'enter') {
-      // Llega volando desde un costado hasta el comienzo de su recorrido
+      // Llega volando desde un costado hasta el comienzo de su recorrido, mirando hacia el paciente
       const k = Math.min(1, bird.t / 2.5);
       const e = k * k * (3 - 2 * k);
       const a = bird.from; const b = bird.to;
       pos.set(a.x + (b.x - a.x) * e, a.y + (b.y - a.y) * e + Math.sin(Math.PI * k) * 0.25, a.z + (b.z - a.z) * e);
-      bird.root.lookAt(b.x, pos.y, b.z);
+      this.faceBlend(bird, b.x - a.x, b.z - a.z, h, 0.5);
       this.flap(bird, 14, 0.9);
       if (k >= 1) { bird.state = 'roam'; bird.t = 0; bird.pathT = 0; }
       return;
@@ -319,27 +382,30 @@ export class BreathScene {
       bird.pathT += dt;
       const p = this.pathPos(bird, bird.pathT);
       const nx = this.pathPos(bird, bird.pathT + 0.15);
+      const lag = this.pathPos(bird, Math.max(0, bird.pathT - FOLLOW_LAG_SECS));
       pos.set(p.x, p.y, p.z);
-      bird.root.lookAt(nx.x, nx.y, nx.z);
+      // De tres cuartos: mira hacia donde vuela, pero con la carita girada hacia el paciente (nunca de espaldas)
+      this.faceBlend(bird, nx.x - p.x, nx.z - p.z, h, 0.65);
       this.flap(bird, 10, 0.75);
       this.birdYaw = p.yawDeg;
-      // Anillo de seguimiento junto al pajarito, mirando al paciente
+      // Anillo de seguimiento alrededor del pajarito, mirando al paciente
       this.follow.visible = true;
       this.follow.position.set(p.x, p.y + 0.005, p.z);
-      this.follow.lookAt(0, this.eyeH, 0);
-      // Solo cuenta cuando el pajarito está hacia un lado (así de verdad hay que girar la cabeza)
-      const away = Math.abs(p.yawDeg) >= FOLLOW_TOLERANCE_DEG;
-      const following = !!gaze && looking(gaze.yawDeg, p.yawDeg, FOLLOW_TOLERANCE_DEG);
-      if (following && away) this.gazeMs += dt * 1000;
-      else if (!following) this.gazeMs = Math.max(0, this.gazeMs - dt * 400);
+      this.faceLocal(this.follow, h.x, h.y, h.z);
+      const f = gaze ? followCredit(gaze.yawDeg, this.yawFromHead(h, p), this.yawFromHead(h, lag), this.headSpeed) : { near: false, credit: false };
+      if (f.credit) this.gazeMs += dt * 1000;
+      else if (!f.near) this.gazeMs = Math.max(0, this.gazeMs - dt * 250);
       this.setFill(Math.min(1, this.gazeMs / FOLLOW_NEED_MS));
+      // El anillo brilla un poco más mientras lo está siguiendo
+      this.fillRing.material.opacity = f.near ? 1 : 0.7;
       if (this.gazeMs >= FOLLOW_NEED_MS) {
-        // ¡Lo acompañó! El pajarito se detiene, mira al paciente y lo saluda
+        // ¡Lo acompañó! El pajarito se detiene, se da vuelta hacia el paciente y lo saluda
         bird.state = 'greet';
         bird.t = 0;
         bird.greetPos = { x: p.x, y: p.y, z: p.z };
         this.follow.visible = false;
         this.birdsDone++;
+        this.drawSay(BIRD_GREETINGS[(this.birdsDone - 1) % BIRD_GREETINGS.length]);
         if (this.host.sfx) this.host.sfx.birdChirp(p.x);
         this.host.onBird && this.host.onBird(this.birdsDone);
       }
@@ -347,21 +413,33 @@ export class BreathScene {
     }
 
     if (bird.state === 'greet') {
-      // Se queda tranquilo frente al paciente: un saltito, saluda con un ala e inclina la cabeza
+      // Se queda tranquilo frente al paciente: saltitos, saluda con un ala, inclina la cabeza y "habla"
       const t = bird.t;
       const g = bird.greetPos;
-      const hop = t < 1.2 ? Math.abs(Math.sin(t * 7)) * 0.035 * (1 - t / 1.2) : 0;
+      const hop = t < 1.4 ? Math.abs(Math.sin(t * 7)) * 0.04 * (1 - t / 1.4) : (t > 3 && t < 3.6 ? Math.abs(Math.sin((t - 3) * 10)) * 0.02 : 0);
       pos.set(g.x, g.y + hop, g.z);
-      bird.root.lookAt(0, this.eyeH, 0);
+      this.faceLocal(bird.root, h.x, h.y, h.z);
       bird.root.rotateZ(Math.sin(t * 2.2) * 0.18); // inclina la cabeza
-      if (t > 0.9 && t < 2.8) {
+      if (t > 0.6 && t < 3.2) {
         bird.wings[0].rotation.z = 0.15;
-        bird.wings[1].rotation.z = -0.4 - 0.7 * Math.abs(Math.sin((t - 0.9) * 6)); // saludo con un ala
+        bird.wings[1].rotation.z = -0.4 - 0.7 * Math.abs(Math.sin((t - 0.6) * 6)); // saludo con un ala
       } else {
         this.flap(bird, 2, 0.1);
       }
+      // Globo con el saludo, sobre el pajarito y mirando al paciente (aparece con un pequeño rebote)
+      const show = t > 0.35 && t < 4.6;
+      this.say.visible = show;
+      if (show) {
+        const k = Math.min(1, (t - 0.35) / 0.35);
+        const out = t > 4.2 ? Math.max(0, 1 - (t - 4.2) / 0.4) : 1;
+        const sc = (0.6 + 0.4 * k + Math.sin(k * Math.PI) * 0.12) * out;
+        this.say.scale.setScalar(Math.max(0.01, sc));
+        this.say.position.set(g.x, g.y + 0.36, g.z);
+        this.faceLocal(this.say, h.x, h.y, h.z);
+      }
       if (t > 1.6 && !bird.secondChirp) { bird.secondChirp = true; if (this.host.sfx) this.host.sfx.birdChirp(g.x); }
-      if (t > 3.6) {
+      if (t > 4.8) {
+        this.say.visible = false;
         bird.state = 'leave'; bird.t = 0; bird.secondChirp = false;
         bird.from = { ...g };
         const out = g.x >= 0 ? 1 : -1;
@@ -375,7 +453,7 @@ export class BreathScene {
       const e = k * k;
       const a = bird.from; const b = bird.to;
       pos.set(a.x + (b.x - a.x) * e, a.y + (b.y - a.y) * e, a.z + (b.z - a.z) * e);
-      bird.root.lookAt(b.x, b.y, b.z);
+      this.faceLocal(bird.root, b.x, b.y, b.z);
       this.flap(bird, 14, 0.9);
       if (k >= 1) {
         bird.state = 'idle';
@@ -383,6 +461,16 @@ export class BreathScene {
         this.nextBird();
       }
     }
+  }
+
+  // Orienta al pajarito entre la dirección de vuelo (dx, dz) y la cabeza del paciente (w: cuánto mira al paciente)
+  faceBlend(bird, dx, dz, h, w) {
+    const p = bird.root.position;
+    const tl = Math.hypot(dx, dz) || 1;
+    let hx = h.x - p.x; let hz = h.z - p.z;
+    const hl = Math.hypot(hx, hz) || 1; hx /= hl; hz /= hl;
+    const fx = (dx / tl) * (1 - w) + hx * w; const fz = (dz / tl) * (1 - w) + hz * w;
+    this.faceLocal(bird.root, p.x + fx, p.y, p.z + fz);
   }
 
   flap(bird, speed, amp) {

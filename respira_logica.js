@@ -95,8 +95,25 @@ export function looking(yawDeg, targetDeg, tol = GAZE_TOLERANCE_DEG) {
 
 /* ---------------- Vuelo de los pajaritos (se siguen con la mirada) ---------------- */
 
-// Margen técnico para "seguir" a un pajarito en movimiento (algo más amplio que para un punto quieto)
-export const FOLLOW_TOLERANCE_DEG = 12;
+// Margen técnico para "seguir" a un pajarito en movimiento (más amplio que para un punto quieto; se amplió en 0.10.6
+// porque en el Quest costaba llenar el anillo). Además se acepta mirar donde estaba el pajarito hace un instante,
+// porque una persona sigue un objeto en movimiento con un pequeño retraso.
+export const FOLLOW_TOLERANCE_DEG = 15;
+export const FOLLOW_LAG_SECS = 0.6;
+// Para que cuente, la cabeza debe estar girada (al menos 6°) o moviéndose (al menos 3°/s): mirar fijo al frente no llena el anillo.
+export const FOLLOW_MIN_TURN_DEG = 6;
+export const FOLLOW_MIN_SPEED_DEG = 3;
+
+// ¿Está siguiendo al pajarito? headYaw: hacia dónde apunta la cabeza; birdYaw / lagYaw: dónde está el pajarito
+// ahora y hace un instante (vistos desde la cabeza); headSpeed: rapidez de giro de la cabeza (°/s).
+export function followCredit(headYaw, birdYaw, lagYaw, headSpeed) {
+  const near = looking(headYaw, birdYaw, FOLLOW_TOLERANCE_DEG) || looking(headYaw, lagYaw, FOLLOW_TOLERANCE_DEG);
+  const engaged = Math.abs(headYaw) >= FOLLOW_MIN_TURN_DEG || headSpeed >= FOLLOW_MIN_SPEED_DEG;
+  return { near, credit: near && engaged };
+}
+
+// Lo que dice el pajarito al saludar (se van turnando)
+export const BIRD_GREETINGS = ['¡Hola! ¿Cómo estás?', '¡Gracias por acompañarme!', '¡Qué rico volar contigo!', '¡Hola! ¡Qué lindo día!'];
 // Tiempo acumulado siguiéndolo con la mirada para que se detenga a saludar (técnico, a confirmar en el Quest)
 export const FOLLOW_NEED_MS = 3000;
 

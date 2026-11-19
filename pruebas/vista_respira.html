@@ -1,5 +1,5 @@
 <!doctype html><html><head><meta charset="utf-8"><title>Vista previa Respira</title></head><body style="margin:0;background:#000"><script type="module">
-// Vista previa de la escena Respira en el computador (sin visor). Uso: ?etapa=estrella o ?etapa=pajaros
+// Vista previa de la escena Respira en el computador (sin visor). Uso: ?etapa=estrella, ?etapa=pajaros o ?etapa=saludo
 import * as THREE from '../libs/three.module.min.js';
 import { BreathScene } from '../respira.js';
 const etapa = new URLSearchParams(location.search).get('etapa') || 'estrella';
@@ -11,14 +11,23 @@ const ground = new THREE.Mesh(new THREE.CircleGeometry(30, 64), new THREE.MeshSt
 for (let i = 0; i < 6; i++) { const t = new THREE.Mesh(new THREE.SphereGeometry(0.9, 32, 24), new THREE.MeshStandardMaterial({ color: i % 2 ? 0x6aa36f : 0xd99aa5 })); t.position.set(-6 + i * 2.4, 2.2, -7); scene.add(t); }
 const anchor = new THREE.Group(); scene.add(anchor);
 const sc = new BreathScene(THREE, anchor, { audioCtx: () => null, musicOn: () => false, sfx: null });
-sc.configure({ minutes: 3, breathContent: etapa === 'pajaros' ? 'pajaros' : 'estrella', breathPattern: '4-6', neckRange: 'medio' }, 1.15);
+sc.configure({ minutes: 3, breathContent: etapa === 'estrella' ? 'estrella' : 'pajaros', breathPattern: '4-6', neckRange: 'medio' }, 1.15);
 sc.setVisible(true); sc.start(0);
 const cam = new THREE.PerspectiveCamera(75, 1000 / 700, 0.05, 80); cam.position.set(0, 1.15, 0);
-if (etapa === 'pajaros') {
-  // simular: mirar la primera luz hasta que llegue el pajarito y quede posado
-  for (let i = 0; i < 72 * 5.2; i++) sc.step(1 / 72, { yawDeg: sc.perchAngle ?? 0, pitchDeg: 0 });
-  const a = sc.perchAngle * Math.PI / 180;
-  cam.lookAt(Math.sin(a) * 1.5, 1.15, -Math.cos(a) * 1.5);
+if (etapa === 'pajaros' || etapa === 'saludo') {
+  // simular a un paciente que sigue al pajarito con la mirada (con un poco de retraso)
+  const want = etapa === 'saludo' ? 1 : 0;
+  const hist = []; let t = 0;
+  for (let i = 0; i < 72 * 40; i++) {
+    t += 1 / 72; hist.push([t, sc.birdYaw || 0]);
+    const old = hist.find(([tt]) => tt >= t - 0.4) || hist[0];
+    sc.step(1 / 72, { yawDeg: old[1] * 0.85, pitchDeg: 0 });
+    const b = sc.active_bird;
+    if (want === 0 && b && b.state === 'roam' && sc.gazeMs > 1500) break;
+    if (want === 1 && b && b.state === 'greet' && b.t > 1.2) break;
+  }
+  const p = sc.active_bird.root.position;
+  cam.lookAt(p.x, p.y + 0.1, p.z);
 } else {
   for (let i = 0; i < 72 * 3.6; i++) sc.step(1 / 72, null); // casi al final de la inhalación
   cam.lookAt(0, 1.05, -1.7);

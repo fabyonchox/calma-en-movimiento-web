@@ -1,7 +1,7 @@
 // Pruebas del modo "Respira" (sin visor): node pruebas/test_respira.mjs
 import assert from 'node:assert/strict';
 import {
-  BREATH_PATTERNS, breathAt, cycleSecs, plan, perchAngles, NECK_RANGES, looking, birdPath, starPose, STAR_NEAR, STAR_FAR,
+  BREATH_PATTERNS, breathAt, cycleSecs, plan, perchAngles, NECK_RANGES, looking, birdPath, starPose, STAR_NEAR, STAR_FAR, followCredit, BIRD_GREETINGS,
 } from '../respira_logica.js';
 
 // 1) Cada patrón: tramos en orden, tamaño de la estrella sube al inhalar y baja al exhalar
@@ -87,6 +87,16 @@ for (const [key, r] of Object.entries(NECK_RANGES)) {
     const p = starPose(sz, t);
     assert.ok(Math.abs(p.x) < 0.5 && p.y > -0.1 && p.y < 0.5, 'la estrella se mantiene frente al paciente');
   }
+}
+
+// 7) Seguir al pajarito: tolerante con el retraso, pero mirar fijo al frente no cuenta
+{
+  assert.equal(followCredit(10, 22, 12, 8).credit, true, 'sigue con retraso: cuenta');
+  assert.equal(followCredit(0, 10, 9, 0).credit, false, 'cabeza quieta al frente: no cuenta');
+  assert.equal(followCredit(0, 3, 2, 0.5).credit, false, 'pajarito pasando por el centro y cabeza quieta: no cuenta');
+  assert.equal(followCredit(-2, 4, -6, 12).credit, true, 'acompañando el paso por el centro: cuenta');
+  assert.equal(followCredit(30, -10, -12, 10).credit, false, 'mirando al otro lado: no cuenta');
+  assert.ok(BIRD_GREETINGS.length >= 3 && BIRD_GREETINGS.every((t) => t.length <= 28), 'saludos cortos');
 }
 
 console.log('OK: pruebas de Respira');
