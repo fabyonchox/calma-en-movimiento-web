@@ -55,6 +55,48 @@ export class BreathScene {
     this.starGroup.add(this.word);
     this.lastWord = '';
 
+    // Rayos de luz suaves detrás de la estrella (giran muy lento)
+    this.rays = new T.Mesh(new T.PlaneGeometry(1.5, 1.5), new T.MeshBasicMaterial({ map: raysTexture(T), color: 0xffd98a, transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0.3 }));
+    this.rays.position.z = -0.04;
+    this.starGroup.add(this.rays);
+
+    // Espiral de luz alrededor de la estrella (tipo galaxia): al inhalar las luces viajan hacia la estrella,
+    // al exhalar se alejan y la espiral se abre. Gira lento (técnico: ~5°/s, para no marear).
+    this.spiralN = 1200;
+    this.spiral = [];
+    const sp = new Float32Array(this.spiralN * 3);
+    const sc = new Float32Array(this.spiralN * 3);
+    for (let i = 0; i < this.spiralN; i++) {
+      const g1 = (Math.random() + Math.random() + Math.random()) / 3 - 0.5; // reparto suave (más luces al centro del brazo)
+      this.spiral.push({ arm: i % 3, u0: Math.random(), j: g1 * 1.1, rj: (Math.random() - 0.5), jz: (Math.random() - 0.5) * 0.08, warm: Math.random() });
+    }
+    const sg = new T.BufferGeometry();
+    sg.setAttribute('position', new T.BufferAttribute(sp, 3));
+    sg.setAttribute('color', new T.BufferAttribute(sc, 3));
+    this.spiralGeo = sg;
+    this.spiralPoints = new T.Points(sg, new T.PointsMaterial({ size: 0.03, map: this.glowTex, vertexColors: true, transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0.95, fog: false }));
+    this.spiralPoints.position.z = -0.02;
+    this.starGroup.add(this.spiralPoints);
+    this.flow = 0;
+    this.spin = 0;
+
+    // Cielo de estrellas alrededor del paciente (aparece de a poco con la estrella, en todo el entorno)
+    const skyN = 650;
+    const kp = new Float32Array(skyN * 3);
+    for (let i = 0; i < skyN; i++) {
+      // solo sobre el horizonte, a 22–28 m
+      const a = Math.random() * Math.PI * 2;
+      const el = Math.asin(0.08 + Math.random() * 0.92);
+      const r = 22 + Math.random() * 6;
+      kp[i * 3] = Math.cos(el) * Math.sin(a) * r; kp[i * 3 + 1] = Math.sin(el) * r; kp[i * 3 + 2] = -Math.cos(el) * Math.cos(a) * r;
+    }
+    const kg = new T.BufferGeometry();
+    kg.setAttribute('position', new T.BufferAttribute(kp, 3));
+    this.skyStars = new T.Points(kg, new T.PointsMaterial({ size: 0.16, map: this.glowTex, color: 0xfff6dd, transparent: true, depthWrite: false, blending: T.AdditiveBlending, opacity: 0, fog: false }));
+    this.skyStars.visible = false;
+    this.group.add(this.skyStars);
+    this.skyK = 0;
+
     // Estela de chispas que deja la estrella al volar
     this.trailN = 26;
     this.trail = [];
@@ -200,6 +242,7 @@ export class BreathScene {
     this.birdIdx = 0;
     this.gazeMs = 0;
     this.trail = [];
+    this.skyK = 0; this.flow = 0;
     this.starGroup.visible = this.stage === 'star';
     this.trailPoints.visible = this.stage === 'star';
     this.birds.forEach((b) => { b.root.visible = false; b.state = 'idle'; });
@@ -214,6 +257,7 @@ export class BreathScene {
 
   stop() {
     this.active = false;
+    this.skyStars.visible = false; this.skyK = 0;
     this.music.stop();
     this.follow.visible = false;
     this.birds.forEach((b) => { b.root.visible = false; });
@@ -224,7 +268,13 @@ export class BreathScene {
   step(dt, gaze) {
     if (!this.active) return;
     this.elapsed += dt;
+    this.lastDt = dt;
     this.group.updateMatrixWorld(true);
+    // Cielo de estrellas: aparece de a poco con la estrella y se va con los pajaritos
+    const skyTarget = this.stage === 'star' ? 1 : 0;
+    this.skyK += (skyTarget - this.skyK) * Math.min(1, dt * 0.35);
+    this.skyStars.visible = this.skyK > 0.01;
+    this.skyStars.material.opacity = 0.9 * this.skyK;
     const c = this.cfg || {};
     if (this.stage === 'star') {
       const b = breathAt(this.elapsed, c.breathPattern);
@@ -251,6 +301,10 @@ export class BreathScene {
     this.starGroup.position.set(p.x, this.eyeH + p.y, p.z);
     this.faceLocal(this.starGroup, 0, this.eyeH, 0);
     this.updateTrail();
+    this.updateSpiral(b);
+    this.rays.rotation.z += 0.0015;
+    this.rays.scale.setScalar(0.75 + 0.5 * b.size);
+    this.rays.material.opacity = 0.12 + 0.3 * b.size;
     const s = 0.8 + 0.3 * b.size;
     this.star.scale.setScalar(s);
     this.star.rotation.z += 0.004 + 0.01 * (1 - b.size); // gira más al alejarse
@@ -258,7 +312,7 @@ export class BreathScene {
     this.halo.scale.setScalar(0.7 + 0.6 * b.size);
     this.halo.material.opacity = 0.18 + 0.3 * b.size;
     this.ring.scale.setScalar(0.85 + 0.35 * b.size);
-    this.ring.material.opacity = b.name === 'hold' || b.name === 'holdOut' ? 0.55 : 0.3;
+    this.ring.material.opacity = b.name === 'hold' || b.name === 'holdOut' ? 0.4 : 0.15;
     this.breathSize = b.size;
     const w = WORDS[b.name] || '';
     if (w !== this.lastWord) {
@@ -266,6 +320,34 @@ export class BreathScene {
       this.drawWord(w);
       this.host.onWord && this.host.onWord(b.name);
     }
+  }
+
+  // Espiral: cada luz recorre su brazo; u = 0 junto a la estrella, u = 1 en el borde.
+  updateSpiral(b) {
+    const dt = this.lastDt || 1 / 72;
+    // Inhalar: las luces viajan hacia la estrella. Exhalar: se alejan. Sostener: casi quietas.
+    const dir = b.name === 'inhale' ? -1 : b.name === 'exhale' ? 1 : 0;
+    this.flow += dir * dt * 0.09;
+    this.spin += dt * 0.09; // ~5°/s
+    const rMax = 0.42 + 0.5 * (1 - b.size); // cerca: espiral más recogida; lejos: más abierta (tamaño aparente parecido)
+    const pos = this.spiralGeo.attributes.position.array;
+    const col = this.spiralGeo.attributes.color.array;
+    const glow = 0.55 + 0.45 * b.size;
+    for (let i = 0; i < this.spiralN; i++) {
+      const q = this.spiral[i];
+      let u = (q.u0 + this.flow) % 1; if (u < 0) u += 1;
+      const r = (0.07 + rMax * Math.pow(u, 0.85)) * (1 + q.rj * 0.14);
+      const th = q.arm * (2 * Math.PI / 3) + 3.2 * u + this.spin + q.j * (0.35 + 0.9 * u);
+      pos[i * 3] = Math.cos(th) * r;
+      pos[i * 3 + 1] = Math.sin(th) * r;
+      pos[i * 3 + 2] = q.jz - 0.08 * u;
+      // Brillo: más intenso cerca de la estrella, se apaga en el borde (sin cortes al reaparecer)
+      const fade = Math.min(1, u * 8) * (1 - u) * glow;
+      const w = q.warm;
+      col[i * 3] = fade * (0.85 + 0.15 * w); col[i * 3 + 1] = fade * (0.75 + 0.15 * w); col[i * 3 + 2] = fade * (1 - 0.45 * w);
+    }
+    this.spiralGeo.attributes.position.needsUpdate = true;
+    this.spiralGeo.attributes.color.needsUpdate = true;
   }
 
   // Estela: guarda las últimas posiciones de la estrella y las dibuja como chispas que se desvanecen
@@ -485,6 +567,25 @@ export class BreathScene {
 }
 
 /* ================= utilidades ================= */
+
+// Rayos suaves (para detrás de la estrella)
+function raysTexture(T) {
+  const c = makeCanvas(256, 256); const g = c.getContext && c.getContext('2d');
+  if (g) {
+    g.translate(128, 128);
+    for (let i = 0; i < 12; i++) {
+      g.rotate(Math.PI / 6);
+      const len = i % 2 ? 90 : 124;
+      const grd = g.createLinearGradient(0, 0, 0, -len);
+      grd.addColorStop(0, 'rgba(255,240,200,0.75)'); grd.addColorStop(1, 'rgba(255,240,200,0)');
+      g.fillStyle = grd;
+      g.beginPath(); g.moveTo(-7, 0); g.lineTo(0, -len); g.lineTo(7, 0); g.closePath(); g.fill();
+    }
+  }
+  const t = new T.CanvasTexture(c);
+  if (T.SRGBColorSpace) t.colorSpace = T.SRGBColorSpace;
+  return t;
+}
 
 // Estrella de puntas redondeadas
 function roundedStar(T, points, rOut, rIn, round) {
