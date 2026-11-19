@@ -2,7 +2,7 @@ import { getSyncServerUrl, getSessionCode } from './sync-config.js';
 import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure } from './logic.js';
 import { PatientsPanel } from './pacientes.js';
 
-const APP_VERSION = '0.10.7';
+const APP_VERSION = '0.10.8';
 
 let ws = null;
 let currentRoom = getSessionCode() || 'HOSPITAL-1';

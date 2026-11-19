@@ -2,9 +2,10 @@ import * as THREE from './libs/three.module.min.js';
 import { FairScene } from './feria_escena.js';
 import { Guide, GuideVoice } from './guia.js';
 import { Sfx } from './sfx.js';
+import { SpaceScene } from './espacio.js';
 import { BreathScene } from './respira.js';
 import { NatureAmbience } from './musica.js';
-import { grassTexture, barkTexture, leafTexture, stoneTexture, waterTexture, wickerTexture, softShadow, organicSphere, addClouds, addGrassTufts, tintGround } from './ambiente.js';
+import { grassTexture, barkTexture, leafTexture, stoneTexture, waterTexture, wickerTexture, softShadow, organicSphere, addClouds, addGrassTufts, tintGround, addHorizon, addMeadowFlowers } from './ambiente.js';
 import {
   DEFAULTS, ZONES, SIZES, MESSAGES, normalizeConfig, mergeConfig, REMOTE_KEYS, effectiveDistances, pickTarget,
   horizontalDistance, distance, formatTime, newRecord, buildCSV, buildSummary, sustainedReach,
@@ -865,13 +866,17 @@ function initThree() {
   scene.add(sun);
   sunLight = sun;
 
+  const nScene = scene.children.length;
   buildSky();
+  gardenEnv = scene.children.slice(nScene); // cielo y nubes
 
   anchor = new THREE.Group();
   scene.add(anchor);
+  const nAnchor = anchor.children.length;
   buildEnvironment();
   buildGrassTufts();
   buildFireflies();
+  gardenEnv.push(...anchor.children.slice(nAnchor)); // suelo, piedras, arroyo, árboles, pasto, luciérnagas
   buildSparks();
 
   menuPanel = new VRPanel(THREE, { width: 1.25, height: 0.78 });
@@ -1004,6 +1009,32 @@ function initThree() {
 }
 
 // Domo de cielo con gradiente suave zen
+let gardenEnv = []; // objetos del paisaje del jardín (se desvanecen en el viaje por el espacio)
+let spaceScene = null;
+let spaceK = 0;
+let gardenMats = null;
+let gardenFadeShown = 1;
+// a: 1 = jardín normal, 0 = jardín oculto. Se desvanece bajando la opacidad de sus materiales.
+function setGardenFade(a) {
+  if (Math.abs(a - gardenFadeShown) < 1e-4) return;
+  if (!gardenMats) {
+    const seen = new Map();
+    gardenEnv.forEach((o) => o.traverse((n) => {
+      const ms = n.material ? (Array.isArray(n.material) ? n.material : [n.material]) : [];
+      ms.forEach((m) => { if (!seen.has(m)) seen.set(m, { o: m.opacity, t: m.transparent, d: m.depthWrite }); });
+    }));
+    gardenMats = seen;
+  }
+  const wasFull = gardenFadeShown >= 1;
+  gardenFadeShown = a;
+  gardenMats.forEach((orig, m) => {
+    if (a >= 1) { m.opacity = orig.o; if (m.transparent !== orig.t) { m.transparent = orig.t; m.needsUpdate = true; } m.depthWrite = orig.d; return; }
+    if (wasFull || !m.transparent) { if (!m.transparent) { m.transparent = true; m.needsUpdate = true; } }
+    m.opacity = orig.o * a;
+  });
+  gardenEnv.forEach((o) => { o.visible = a > 0.01 ? (o.userData.wasVisible ?? (o.userData.wasVisible = o.visible)) : false; });
+  if (a >= 1) gardenEnv.forEach((o) => { if (o.userData.wasVisible !== undefined) { o.visible = o.userData.wasVisible; delete o.userData.wasVisible; } });
+}
 let skyMaterial = null; // se oscurece suavemente en la etapa de la estrella (cielo de noche)
 function buildSky() {
   const canvas = document.createElement('canvas');
@@ -1107,6 +1138,10 @@ function buildEnvironment() {
     h.position.set(x, -r * 0.58, z);
     anchor.add(h);
   });
+
+  // Horizonte completo (cerros con bruma y bosque lejano en 360°) y flores silvestres en la pradera
+  addHorizon(THREE, anchor);
+  addMeadowFlowers(THREE, anchor, { avoid: (x, z) => (Math.abs(x) < 1.2 && z > -2.6 && z < 0.8) || (z < -4.3 && z > -9.3 && Math.abs(x) < 9.3) /* arroyo */ });
 
   // Árboles estilizados (mezcla de bosque verde y cerezo sakura)
   const trunkMat = new THREE.MeshLambertMaterial({ color: 0xdcc8b2, map: barkTexture(THREE, 0x87674a) });
@@ -2569,6 +2604,18 @@ function update(dt, now) {
     if (breathOn && nature.on) nature.stop();
     else if (!breathOn && !nature.on) nature.start();
   }
+  // Viaje por el espacio durante la estrella: el jardín se desvanece de a poco y aparece el espacio (y al revés).
+  const spaceTarget = breathOn && breathScene && breathScene.stage === 'star' ? 1 : 0;
+  if (spaceTarget > 0 && !spaceScene) spaceScene = new SpaceScene(THREE, anchor);
+  if (spaceScene) {
+    const before = spaceK;
+    spaceK += Math.sign(spaceTarget - spaceK) * Math.min(Math.abs(spaceTarget - spaceK), dt * 0.22); // ~4,5 s
+    if (spaceK !== before || spaceK > 0) {
+      spaceScene.setAmount(spaceK);
+      setGardenFade(1 - spaceK);
+      spaceScene.step(dt, breathScene ? breathScene.breathSize || 0.5 : 0.5);
+    }
+  }
   // Con la estrella, noche suave (más inmersivo); con los pajaritos, atardecer; fuera de Respira, día.
   duskTo(breathOn ? (breathScene && breathScene.stage === 'star' ? 2 : 1) : 0, dt);
 
@@ -2853,5 +2900,7 @@ function loop() {
 
 initForm();
 
-export const APP_VERSION = '0.10.7';
-export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; } };
+export const APP_VERSION = '0.10.8';
+export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; }, get breathScene() { return breathScene; }, get spaceScene() { return spaceScene; }, get gardenEnv() { return gardenEnv; }, get spaceK() { return spaceK; }, startPlay,
+  // Vista previa del viaje por el espacio (k: 0..1) y del atardecer/noche (d: 0..2)
+  previewSpace(k, d = 2, secs = 2) { if (!spaceScene) spaceScene = new SpaceScene(THREE, anchor); spaceK = k; spaceScene.setAmount(k); setGardenFade(1 - k); for (let i = 0; i < 60; i++) { duskTo(d, 0.2); spaceScene.step(secs / 60, 0.5); } } };
