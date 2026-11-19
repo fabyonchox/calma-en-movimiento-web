@@ -6,6 +6,8 @@
 //   se acerca, salta a la mesa y se la come.
 // Coordenadas locales del jardín: origen en el suelo bajo la cabeza del paciente, -z hacia adelante, y hacia arriba.
 
+import { furTexture, softShadow } from './ambiente.js';
+
 const TAU = Math.PI * 2;
 const rnd = (a, b) => a + Math.random() * (b - a);
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -62,17 +64,30 @@ export class Critters {
   mats() {
     const T = this.T;
     const cache = {};
-    return (color) => (cache[color] || (cache[color] = new T.MeshLambertMaterial({ color })));
+    // Pelaje/plumaje muy sutil (textura clara que se multiplica por el color de cada animal)
+    const fur = furTexture(T);
+    return (color) => (cache[color] || (cache[color] = new T.MeshLambertMaterial({ color, map: fur })));
   }
 
   parts() {
     const T = this.T; const mat = this.mats();
     return {
       mat,
-      sph: (r, color, sx = 1, sy = 1, sz = 1) => { const m = new T.Mesh(new T.SphereGeometry(r, 14, 10), mat(color)); m.scale.set(sx, sy, sz); return m; },
+      sph: (r, color, sx = 1, sy = 1, sz = 1) => { const m = new T.Mesh(new T.SphereGeometry(r, 28, 20), mat(color)); m.scale.set(sx, sy, sz); return m; },
       box: (w, h, d, color) => new T.Mesh(new T.BoxGeometry(w, h, d), mat(color)),
-      cone: (r, h, color) => new T.Mesh(new T.ConeGeometry(r, h, 10), mat(color)),
-      cyl: (rt, rb, h, color) => new T.Mesh(new T.CylinderGeometry(rt, rb, h, 16), mat(color)),
+      cone: (r, h, color) => new T.Mesh(new T.ConeGeometry(r, h, 24), mat(color)),
+      cyl: (rt, rb, h, color) => new T.Mesh(new T.CylinderGeometry(rt, rb, h, 28), mat(color)),
+      // Ala redondeada (forma de gota) en vez de una caja
+      wing: (len, wid, color) => {
+        const sh = new T.Shape();
+        sh.moveTo(0, -wid * 0.3);
+        sh.quadraticCurveTo(len * 0.55, -wid * 0.75, len, 0);
+        sh.quadraticCurveTo(len * 0.6, wid * 0.7, 0, wid * 0.35);
+        sh.closePath();
+        const m = new T.Mesh(new T.ShapeGeometry(sh, 20), new T.MeshLambertMaterial({ color, side: T.DoubleSide }));
+        m.rotation.x = -Math.PI / 2;
+        return m;
+      },
     };
   }
 
@@ -90,7 +105,7 @@ export class Critters {
     head.add(earL, earR, eyeL, eyeR, nose);
     head.position.set(0, 0.2, -0.13);
     const tail = sph(0.04, 0xffffff); tail.position.set(0, 0.14, 0.16);
-    g.add(body, head, tail);
+    g.add(body, head, tail, softShadow(T, 0.17, 0.85, 1, 1.3));
     return { kind: 'rabbit', g, head, earL, earR, parts: { body }, ground: true, pad: 0.14, speed: 0.75, hop: { len: 0.2, h: 0.09 } };
   }
 
@@ -111,30 +126,42 @@ export class Critters {
     const tail = new T.Group();
     const tm = sph(0.075, 0xb85f25, 0.8, 1.9, 0.8); tm.position.set(0, 0.14, 0);
     tail.add(tm); tail.position.set(0, 0.08, 0.07);
-    g.add(body, belly, head, tail);
+    g.add(body, belly, head, tail, softShadow(T, 0.13, 0.85, 1, 1.2));
     return { kind: 'squirrel', g, head, tail, parts: { body }, ground: true, pad: 0.13, speed: 1.0, hop: { len: 0.26, h: 0.05 } };
   }
 
   makeBird() {
-    const T = this.T; const { sph, box, cone } = this.parts();
+    const T = this.T; const { sph, cone, wing } = this.parts();
     const g = new T.Group();
     const body = sph(0.05, 0x4f8fd6, 1, 0.9, 1.5);
     const head = sph(0.035, 0x6aa6e6); head.position.set(0, 0.025, -0.07);
     const beak = cone(0.012, 0.035, 0xf2a93b); beak.rotation.x = -Math.PI / 2; beak.position.set(0, 0.02, -0.11);
-    const tail = box(0.04, 0.008, 0.07, 0x356aa8); tail.position.set(0, 0.005, 0.1);
-    const wingL = new T.Group(); const wl = box(0.13, 0.008, 0.06, 0x3f7bc4); wl.position.x = -0.065; wingL.add(wl);
-    const wingR = new T.Group(); const wr = box(0.13, 0.008, 0.06, 0x3f7bc4); wr.position.x = 0.065; wingR.add(wr);
+    const tail = cone(0.025, 0.07, 0x356aa8); tail.rotation.x = Math.PI / 2 - 0.25; tail.scale.set(1.3, 1, 0.4); tail.position.set(0, 0.01, 0.1);
+    const wingL = new T.Group(); const wl = wing(0.13, 0.07, 0x3f7bc4); wl.scale.x = -1; wingL.add(wl);
+    const wingR = new T.Group(); const wr = wing(0.13, 0.07, 0x3f7bc4); wingR.add(wr);
     wingL.position.set(-0.03, 0.02, 0); wingR.position.set(0.03, 0.02, 0);
     g.add(body, head, beak, tail, wingL, wingR);
     return { kind: 'bird', g, wingL, wingR, head, ground: false, pad: 0.1, speed: 1.5, ang: 0, rad: 4, h: 1.7 };
   }
 
   makeButterfly() {
-    const T = this.T; const { box } = this.parts();
+    const T = this.T; const { sph } = this.parts();
     const g = new T.Group();
-    const body = box(0.008, 0.008, 0.05, 0x3a2f2f);
-    const wl = new T.Group(); const l = box(0.05, 0.004, 0.04, 0xf5a742); l.position.x = -0.025; wl.add(l);
-    const wr = new T.Group(); const r = box(0.05, 0.004, 0.04, 0xf5a742); r.position.x = 0.025; wr.add(r);
+    const body = sph(0.006, 0x3a2f2f, 1, 1, 4.5);
+    // Ala de mariposa: dos lóbulos redondeados (superior grande, inferior pequeño)
+    const lobe = (rx, rz, cx, cz, color) => {
+      const m = new T.Mesh(new T.CircleGeometry(1, 28), new T.MeshLambertMaterial({ color, side: T.DoubleSide }));
+      m.rotation.x = -Math.PI / 2; m.scale.set(rx, rz, 1); m.position.set(cx, 0, cz);
+      return m;
+    };
+    const makeWing = (s) => {
+      const w = new T.Group();
+      w.add(lobe(0.03, 0.022, s * 0.028, -0.01, 0xf5a742), lobe(0.019, 0.016, s * 0.02, 0.018, 0xf0884a));
+      const dot = lobe(0.006, 0.006, s * 0.034, -0.012, 0xfff3d6); dot.position.y = 0.0005; w.add(dot);
+      return w;
+    };
+    const wl = makeWing(-1);
+    const wr = makeWing(1);
     g.add(body, wl, wr);
     return { kind: 'butterfly', g, wl, wr, ground: false, pad: 0.05, speed: 0.9, calm: 0 };
   }

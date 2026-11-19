@@ -51,6 +51,20 @@ export const PHRASES = {
   encuesta: 'Ahora tu kinesiólogo te hará unas preguntas.',
   descanso: 'Puedes descansar. Gracias por tu esfuerzo de hoy.',
   adios: '¡Hasta la próxima!',
+
+  // Respira (relajación)
+  inst_breath: 'Este es un momento para relajarte. Mira la estrella: cuando se acerca, toma aire; cuando se aleja volando, suéltalo despacio.',
+  resp_inhala: 'Inhala…',
+  resp_exhala: 'Exhala…',
+  resp_sosten: 'Sostén un momento…',
+  resp_bien_1: 'Muy bien, sigue a tu ritmo.',
+  resp_bien_2: 'Así, con calma.',
+  resp_bien_3: 'Deja que el aire entre y salga suavemente.',
+  pajaros_intro: 'Ahora sigue al pajarito con la mirada, girando suavemente la cabeza. Si lo acompañas un momento, se detendrá a saludarte.',
+  pajaro_1: '¡Mira, el pajarito te saluda!',
+  pajaro_2: 'Qué bonito, escucha cómo canta.',
+  pajaro_3: 'Muy bien, ahora sigue al próximo pajarito.',
+  resp_fin: 'Terminamos este momento de calma. Gracias por regalarte este tiempo.',
 };
 
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -133,6 +147,27 @@ export class GuideVoice {
   }
 }
 
+/* ================= Letra redondeada (Fredoka, licencia libre OFL, incluida en fonts/) ================= */
+
+export const FONT = "'Fredoka', 'Nunito', 'Trebuchet MS', 'Segoe UI', sans-serif";
+let fontReady = false;
+export function loadGuideFont(onReady) {
+  try {
+    if (typeof FontFace === 'undefined' || typeof document === 'undefined' || !document.fonts) return;
+    const faces = [['600', 'fonts/fredoka-latin-600-normal.woff2'], ['700', 'fonts/fredoka-latin-700-normal.woff2']]
+      .map(([w, url]) => new FontFace('Fredoka', `url(${url}) format('woff2')`, { weight: w }));
+    Promise.all(faces.map((f) => f.load().then((ff) => document.fonts.add(ff)))).then(() => { fontReady = true; if (onReady) onReady(); }).catch(() => {});
+  } catch (e) { /* sin la fuente se usa la letra del sistema */ }
+}
+
+// Frases que se celebran con un cartel grande y animado (además de la voz)
+export const POP_TEXT = {
+  bien_1: '¡Muy bien!', bien_2: '¡Excelente!', bien_3: '¡Así se hace!', bien_4: '¡Muy bien hecho!', bien_5: '¡Genial!', bien_6: '¡Perfecto!',
+  mitad: '¡Vas en la mitad!', falta_una: '¡Te falta una!', fin_meta: '¡Lo lograste!',
+  pajaro_1: '¡Hola, pajarito!', resp_bien_1: '¡Muy bien!', resp_bien_2: '¡Con calma!', comenzar: '¡Comencemos!',
+};
+const POP_COLORS = [['#ffd45c', '#ff9a5a'], ['#9be7c4', '#3fb8a0'], ['#ffb6d0', '#ff7aa8'], ['#b9d8ff', '#6fa8ff']];
+
 /* ================= Luz con carita ================= */
 
 export class Guide {
@@ -144,6 +179,7 @@ export class Guide {
     this.group = new THREE.Group();
     this.group.visible = false;
     anchor.add(this.group);
+    this.anchor = anchor;
     this.queue = [];
     this.current = null;
     this.lastCoachAt = -1e9;
@@ -156,31 +192,102 @@ export class Guide {
 
   build() {
     const T = this.T;
-    // Cuerpo: esfera luminosa cálida + halo
+    // Cuerpo: lucecita cálida y lisa, con un halo difuso, un brotecito de hojas, alitas y chispas alrededor
     this.body = new T.Group();
     this.group.add(this.body);
-    const core = new T.Mesh(new T.SphereGeometry(0.075, 32, 20), new T.MeshStandardMaterial({ color: 0xfff3c4, emissive: 0xffd77a, emissiveIntensity: 0.9, roughness: 0.4 }));
+    this.glowTex = glowTex(T);
+    const coreMat = new T.MeshStandardMaterial({ color: 0xfff6d6, emissive: 0xffcf6b, emissiveIntensity: 0.85, roughness: 0.35 });
+    const core = new T.Mesh(new T.SphereGeometry(0.075, 48, 32), coreMat);
+    core.scale.set(1, 0.96, 0.92);
     this.body.add(core);
-    this.halo = new T.Mesh(new T.SphereGeometry(0.11, 24, 16), new T.MeshBasicMaterial({ color: 0xffe9a8, transparent: true, opacity: 0.22, depthWrite: false }));
+    this.coreMat = coreMat;
+    this.halo = new T.Sprite(new T.SpriteMaterial({ map: this.glowTex, color: 0xffe2a0, transparent: true, depthWrite: false, opacity: 0.55 }));
+    this.halo.scale.setScalar(0.34);
+    this.halo.position.z = -0.02;
     this.body.add(this.halo);
-    // Carita (mira hacia +z, hacia el paciente)
-    const dark = new T.MeshBasicMaterial({ color: 0x5a4632 });
-    this.eyes = [-0.024, 0.024].map((x) => {
-      const e = new T.Mesh(new T.SphereGeometry(0.0095, 12, 8), dark);
-      e.position.set(x, 0.014, 0.07);
+    // Brotecito en la cabeza: tallo + dos hojitas
+    const leafMat = new T.MeshStandardMaterial({ color: 0x7ccf8a, roughness: 0.5, emissive: 0x2f6b3a, emissiveIntensity: 0.25, side: T.DoubleSide });
+    const stem = new T.Mesh(new T.CylinderGeometry(0.0035, 0.0045, 0.03, 10), leafMat);
+    stem.position.set(0, 0.083, 0);
+    this.body.add(stem);
+    const leafShape = new T.Shape();
+    leafShape.moveTo(0, 0); leafShape.quadraticCurveTo(0.018, 0.012, 0.034, 0); leafShape.quadraticCurveTo(0.018, -0.012, 0, 0);
+    const leafGeo = new T.ShapeGeometry(leafShape, 12);
+    this.leaves = [-1, 1].map((sgn) => {
+      const l = new T.Mesh(leafGeo, leafMat);
+      l.position.set(0, 0.097, 0);
+      l.rotation.set(0, sgn < 0 ? Math.PI : 0, 0.5);
+      this.body.add(l);
+      return l;
+    });
+    // Alitas translúcidas detrás
+    const wingMat = new T.MeshBasicMaterial({ color: 0xe9f6ff, transparent: true, opacity: 0.55, side: T.DoubleSide, depthWrite: false });
+    const wingShape = new T.Shape();
+    wingShape.moveTo(0, 0); wingShape.quadraticCurveTo(0.05, 0.06, 0.085, 0.03); wingShape.quadraticCurveTo(0.06, -0.01, 0, 0);
+    const wingGeo = new T.ShapeGeometry(wingShape, 16);
+    this.wings = [-1, 1].map((sgn) => {
+      const piv = new T.Group();
+      piv.position.set(sgn * 0.045, 0.01, -0.04);
+      const w = new T.Mesh(wingGeo, wingMat);
+      w.scale.x = sgn;
+      piv.add(w);
+      this.body.add(piv);
+      return piv;
+    });
+    // Ojos grandes con brillo
+    const dark = new T.MeshBasicMaterial({ color: 0x4a3a2a });
+    const shine = new T.MeshBasicMaterial({ color: 0xffffff });
+    this.eyes = [-0.025, 0.025].map((x) => {
+      const e = new T.Group();
+      const ball = new T.Mesh(new T.SphereGeometry(0.0125, 20, 14), dark);
+      ball.scale.z = 0.6;
+      const sp = new T.Mesh(new T.SphereGeometry(0.0042, 10, 8), shine);
+      sp.position.set(0.004, 0.005, 0.006);
+      e.add(ball, sp);
+      e.position.set(x, 0.016, 0.066);
       this.body.add(e);
       return e;
     });
-    this.mouth = new T.Mesh(new T.TorusGeometry(0.02, 0.0045, 8, 20, Math.PI), dark);
+    // Ojitos felices (^ ^) para cuando celebra
+    this.happyEyes = [-0.025, 0.025].map((x) => {
+      const h = new T.Mesh(new T.TorusGeometry(0.011, 0.0035, 8, 20, Math.PI), dark);
+      h.position.set(x, 0.012, 0.07);
+      h.visible = false;
+      this.body.add(h);
+      return h;
+    });
+    this.mouth = new T.Mesh(new T.TorusGeometry(0.017, 0.0042, 10, 24, Math.PI), dark);
     this.mouth.rotation.z = Math.PI; // sonrisa
-    this.mouth.position.set(0, -0.012, 0.071);
+    this.mouth.position.set(0, -0.014, 0.07);
     this.body.add(this.mouth);
-    const cheekMat = new T.MeshBasicMaterial({ color: 0xffb3a7, transparent: true, opacity: 0.6 });
-    [-0.045, 0.045].forEach((x) => {
-      const ch = new T.Mesh(new T.CircleGeometry(0.011, 16), cheekMat);
-      ch.position.set(x, -0.006, 0.066);
+    const cheekMat = new T.MeshBasicMaterial({ color: 0xffa7a0, transparent: true, opacity: 0.55 });
+    [-0.047, 0.047].forEach((x) => {
+      const ch = new T.Mesh(new T.CircleGeometry(0.012, 20), cheekMat);
+      ch.position.set(x, -0.006, 0.062);
+      ch.rotation.y = x > 0 ? 0.5 : -0.5;
       this.body.add(ch);
     });
+    // Chispitas que giran alrededor
+    this.sparkles = [];
+    for (let i = 0; i < 6; i++) {
+      const sp = new T.Sprite(new T.SpriteMaterial({ map: this.glowTex, color: [0xfff2b0, 0xffd1e6, 0xc9f0ff][i % 3], transparent: true, depthWrite: false, opacity: 0.9 }));
+      sp.scale.setScalar(0.022);
+      sp.userData = { a: (i / 6) * Math.PI * 2, r: 0.11 + (i % 2) * 0.02, sp: 0.6 + (i % 3) * 0.2, y: (i % 3 - 1) * 0.03 };
+      this.group.add(sp);
+      this.sparkles.push(sp);
+    }
+    this.joyT = 0; // tiempo restante de "celebración"
+
+    // Cartel de felicitación (grande, con letra redondeada, aparece y se desvanece)
+    this.popCanvas = makeCanvas(1024, 300);
+    this.popTex = new T.CanvasTexture(this.popCanvas);
+    if ('colorSpace' in this.popTex && T.SRGBColorSpace) this.popTex.colorSpace = T.SRGBColorSpace;
+    this.pop = new T.Mesh(new T.PlaneGeometry(0.9, 0.264), new T.MeshBasicMaterial({ map: this.popTex, transparent: true, depthWrite: false }));
+    this.pop.visible = false;
+    this.pop.renderOrder = 10;
+    this.pop.userData.guide = true;
+    this.popT = -1;
+    this.popColor = 0;
 
     // Globo de texto (arriba del guía)
     this.bubbleCanvas = makeCanvas(768, 360);
@@ -202,12 +309,16 @@ export class Guide {
     this.prog.userData.guide = true;
     this.group.add(this.prog);
     this.progKey = '';
+    this.anchor.add(this.pop);
+    loadGuideFont(() => { if (this.current) this.drawBubble(this.current.text); this.progKey = ''; });
   }
 
   // Ubicación: arriba a la izquierda, lejos de las manos y del botón de pausa (que está a la derecha).
   // Si hay un menú a la vista en el visor, el guía se corre más a la izquierda para no taparlo.
   place(eyeH) {
     this.eyeH = eyeH;
+    this.pop.position.set(0, eyeH + 0.42, -1.45);
+    this.pop.lookAt(0, eyeH, 0);
     this.home = { x: this.wide ? -0.86 : -0.56, y: eyeH + 0.08, z: -1.08 };
     this.group.position.set(this.home.x, this.home.y, this.home.z);
     this.aim();
@@ -221,7 +332,7 @@ export class Guide {
 
   aim() { this.group.rotation.y = Math.atan2(-this.group.position.x, -this.group.position.z); } // la carita mira al paciente
 
-  setVisible(v) { this.group.visible = !!v; }
+  setVisible(v) { this.group.visible = !!v; if (!v) this.pop.visible = false; }
 
   enabled() { return !this.opts.enabled || this.opts.enabled(); }
 
@@ -265,9 +376,16 @@ export class Guide {
     const words = m.text.split(/\s+/).length;
     m.until = this.time + Math.max(2.2, words * 0.42 + 0.8);
     this.current = m;
-    this.drawBubble(m.text);
-    this.bubble.visible = true;
     this.log.push(m.id);
+    if (POP_TEXT[m.id]) {
+      // Felicitación: cartel grande + carita feliz (el globo de texto no hace falta)
+      this.celebrate(POP_TEXT[m.id]);
+      this.bubble.visible = false;
+      m.until = this.time + 1.9;
+    } else {
+      this.drawBubble(m.text);
+      this.bubble.visible = true;
+    }
     if (this.opts.sfx) this.opts.sfx.guideChime();
     if (this.voice) m.via = this.voice.speak(m.id, m.text);
   }
@@ -299,12 +417,44 @@ export class Guide {
     g.fillStyle = '#ffffff';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.font = '700 52px sans-serif';
+    g.font = '700 54px ' + FONT;
     g.fillText(hits + ' de ' + reps, c.width / 2, 62);
-    g.font = '600 30px sans-serif';
+    g.font = '600 30px ' + FONT;
     g.fillStyle = '#cfeee4';
     g.fillText('aciertos · intentos: ' + attempts, c.width / 2, 112);
     this.progTex.needsUpdate = true;
+  }
+
+  celebrate(text) {
+    this.joyT = 1.6;
+    this.popColor = (this.popColor + 1) % POP_COLORS.length;
+    this.drawPop(text, POP_COLORS[this.popColor]);
+    this.popT = 0;
+    this.pop.visible = true;
+  }
+
+  // Letra grande, redondeada, con degradé de color, borde blanco grueso, sombra y estrellitas
+  drawPop(text, [c1, c2]) {
+    const c = this.popCanvas; const g = c.getContext && c.getContext('2d');
+    if (!g) return;
+    g.clearRect(0, 0, c.width, c.height);
+    let size = 150;
+    g.font = '700 ' + size + 'px ' + FONT;
+    while (g.measureText(text).width > c.width - 140 && size > 70) { size -= 6; g.font = '700 ' + size + 'px ' + FONT; }
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    const cx = c.width / 2; const cy = c.height / 2 + 8;
+    g.lineJoin = 'round';
+    g.shadowColor = 'rgba(40,30,20,0.35)'; g.shadowBlur = 18; g.shadowOffsetY = 8;
+    g.lineWidth = 26; g.strokeStyle = '#ffffff'; g.strokeText(text, cx, cy);
+    g.shadowColor = 'transparent';
+    const grd = g.createLinearGradient(0, cy - size / 2, 0, cy + size / 2);
+    grd.addColorStop(0, c1); grd.addColorStop(1, c2);
+    g.fillStyle = grd; g.fillText(text, cx, cy);
+    g.lineWidth = 4; g.strokeStyle = 'rgba(90,60,30,0.35)'; g.strokeText(text, cx, cy);
+    // estrellitas a los lados
+    const w = g.measureText(text).width;
+    [[cx - w / 2 - 50, cy - 40, 26], [cx + w / 2 + 48, cy - 30, 22], [cx + w / 2 + 30, cy + 50, 14], [cx - w / 2 - 34, cy + 46, 15]].forEach(([x, y, r]) => star(g, x, y, r, '#ffe27a'));
+    this.popTex.needsUpdate = true;
   }
 
   drawBubble(text) {
@@ -320,7 +470,7 @@ export class Guide {
     let size = 46;
     let lines = [];
     for (; size >= 26; size -= 2) {
-      g.font = '600 ' + size + 'px sans-serif';
+      g.font = '600 ' + size + 'px ' + FONT;
       lines = wrap(g, text, c.width - 80);
       if (lines.length * size * 1.22 <= c.height - 80 && lines.length <= 4) break;
     }
@@ -338,13 +488,40 @@ export class Guide {
       this.group.position.x += (this.home.x - this.group.position.x) * Math.min(1, dt * 3); // se desliza al cambiar de lugar
       this.aim();
     }
-    // parpadeo cada ~4 s
+    // parpadeo cada ~4 s; al celebrar, ojitos felices (^ ^) y un saltito con giro
+    const joy = this.joyT > 0;
+    this.joyT = Math.max(0, this.joyT - dt);
     const blink = (t % 4) < 0.12 ? 0.15 : 1;
-    this.eyes.forEach((e) => { e.scale.y = blink; });
+    this.eyes.forEach((e) => { e.visible = !joy; e.scale.y = blink; });
+    this.happyEyes.forEach((h) => { h.visible = joy; });
+    this.body.position.y = joy ? Math.abs(Math.sin(this.joyT * 9)) * 0.03 : 0;
+    this.body.rotation.y = joy ? Math.sin(this.joyT * 6) * 0.35 : Math.sin(t * 0.7) * 0.08;
+    // alitas que aletean suave (más rápido al celebrar), hojitas que se mecen
+    const flap = Math.sin(t * (joy ? 16 : 5)) * (joy ? 0.6 : 0.3);
+    this.wings[0].rotation.y = 0.5 + flap; this.wings[1].rotation.y = -0.5 - flap;
+    this.leaves.forEach((l, i) => { l.rotation.z = 0.5 + Math.sin(t * 1.8 + i) * 0.15; });
+    // chispitas girando
+    this.sparkles.forEach((sp) => {
+      const u = sp.userData; const a = u.a + t * u.sp * (joy ? 3 : 1);
+      sp.position.set(Math.cos(a) * u.r, u.y + Math.sin(t * 2 + u.a) * 0.01, Math.sin(a) * u.r);
+      sp.material.opacity = 0.5 + 0.4 * Math.sin(t * 3 + u.a);
+    });
     // brillo del halo y "boca que habla"
     const talking = !!this.current;
-    this.halo.material.opacity = 0.2 + Math.sin(t * 2.2) * 0.04 + (talking ? 0.06 : 0);
-    this.mouth.scale.y = talking ? 1 + Math.abs(Math.sin(t * 11)) * 0.9 : 1;
+    this.halo.material.opacity = 0.45 + Math.sin(t * 2.2) * 0.08 + (talking ? 0.1 : 0) + (joy ? 0.2 : 0);
+    this.halo.scale.setScalar(0.34 + (joy ? 0.06 : 0) + Math.sin(t * 2.2) * 0.01);
+    this.coreMat.emissiveIntensity = 0.85 + (joy ? 0.35 : 0);
+    this.mouth.scale.set(joy ? 1.35 : 1, talking ? 1 + Math.abs(Math.sin(t * 11)) * 0.9 : (joy ? 1.4 : 1), 1);
+    // Cartel de felicitación: aparece con un rebote, sube un poco y se desvanece
+    if (this.popT >= 0) {
+      this.popT += dt;
+      const k = this.popT;
+      const sc = k < 0.25 ? 0.4 + (k / 0.25) * 0.75 : k < 0.45 ? 1.15 - ((k - 0.25) / 0.2) * 0.15 : 1;
+      this.pop.scale.setScalar(sc);
+      this.pop.material.opacity = k < 1.3 ? 1 : Math.max(0, 1 - (k - 1.3) / 0.6);
+      if (this.eyeH !== undefined) this.pop.position.y = this.eyeH + 0.42 + Math.min(1.9, k) * 0.03;
+      if (k > 1.9) { this.popT = -1; this.pop.visible = false; }
+    }
     if (this.current && this.time >= this.current.until) {
       this.current = null;
       this.bubble.visible = false;
@@ -354,6 +531,29 @@ export class Guide {
 }
 
 /* ---------- utilidades de dibujo ---------- */
+
+function glowTex(T) {
+  const c = makeCanvas(128, 128);
+  const g = c.getContext && c.getContext('2d');
+  if (g && g.createRadialGradient) {
+    const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    grd.addColorStop(0, 'rgba(255,255,255,1)'); grd.addColorStop(0.3, 'rgba(255,255,255,0.55)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
+    g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+  }
+  return new T.CanvasTexture(c);
+}
+
+function star(g, x, y, r, color) {
+  g.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const rr = i % 2 ? r * 0.45 : r; const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const px = x + Math.cos(a) * rr; const py = y + Math.sin(a) * rr;
+    if (i) g.lineTo(px, py); else g.moveTo(px, py);
+  }
+  g.closePath();
+  g.fillStyle = color; g.fill();
+  g.lineWidth = 3; g.strokeStyle = '#ffffff'; g.stroke();
+}
 
 function makeCanvas(w, h) {
   const c = typeof document !== 'undefined' ? document.createElement('canvas') : { width: w, height: h, getContext: () => null };

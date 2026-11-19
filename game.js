@@ -2,6 +2,9 @@ import * as THREE from './libs/three.module.min.js';
 import { FairScene } from './feria_escena.js';
 import { Guide, GuideVoice } from './guia.js';
 import { Sfx } from './sfx.js';
+import { BreathScene } from './respira.js';
+import { NatureAmbience } from './musica.js';
+import { grassTexture, barkTexture, leafTexture, stoneTexture, waterTexture, wickerTexture, softShadow, organicSphere, addClouds, addGrassTufts, tintGround } from './ambiente.js';
 import {
   DEFAULTS, ZONES, SIZES, MESSAGES, normalizeConfig, mergeConfig, REMOTE_KEYS, effectiveDistances, pickTarget,
   horizontalDistance, distance, formatTime, newRecord, buildCSV, buildSummary, sustainedReach,
@@ -24,6 +27,8 @@ let critters = null; // animalitos de la pantalla de espera
 let fairScene = null; // escenario Feria de juegos
 let guide = null; // guía: luz con carita que acompaña al paciente
 let sfx = null; // sonidos de interacción
+let breathScene = null; // Respira: estrella que respira y pajaritos (relajación)
+let hemiLight = null; let sunLight = null; // luces (Respira las atenúa a un atardecer)
 let treeGroup, basketGroup, targetAppleGroup, harvestedApplesGroup, basketRimGlow;
 const baskets = []; // canasto izquierdo y derecho
 
@@ -431,7 +436,7 @@ function thudBasket() {
 function addBranch(parent, mat, from, to, r0, r1) {
   const dir = new THREE.Vector3().subVectors(to, from);
   const len = dir.length();
-  const geo = new THREE.CylinderGeometry(r1, r0, 1, 8);
+  const geo = new THREE.CylinderGeometry(r1, r0, 1, 14);
   const m = new THREE.Mesh(geo, mat);
   m.scale.set(1, len, 1);
   m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.normalize());
@@ -460,10 +465,11 @@ function buildAppleTree() {
   treeGroup = new THREE.Group();
   treeGroup.position.set(0, 0, -1.6);
 
-  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x614835 });
-  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.25, 2.1, 12), trunkMat);
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0xd8c3ad, map: barkTexture(THREE, 0x7a5a3f) });
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.25, 2.1, 24), trunkMat);
   trunk.position.y = 1.05;
   treeGroup.add(trunk);
+  treeGroup.add(softShadow(THREE, 1.5, 0.55)); // sombra suave del follaje sobre el pasto
 
   for (let r = 0; r < 4; r++) {
     const ang = (r * Math.PI) / 2 + 0.35;
@@ -476,13 +482,13 @@ function buildAppleTree() {
     addBranch(treeGroup, trunkMat, top, new THREE.Vector3(x, y, z), 0.07, 0.035);
   });
 
-  const leafMats = [0x488b4f, 0x5ba363, 0x3d7844].map((c) => new THREE.MeshLambertMaterial({ color: c }));
+  const leafMats = [0x488b4f, 0x5ba363, 0x3d7844].map((c) => new THREE.MeshLambertMaterial({ color: 0xffffff, map: leafTexture(THREE, c) }));
   const clusters = [
     [0, 2.55, 0, 0.75], [0.55, 2.4, 0.35, 0.55], [-0.55, 2.4, 0.35, 0.55],
     [0.7, 2.35, 0.9, 0.5], [-0.7, 2.35, 0.9, 0.5], [0, 2.4, 1.0, 0.55], [0, 2.75, 0.5, 0.6],
   ];
   clusters.forEach(([x, y, z, r], i) => {
-    const s = new THREE.Mesh(new THREE.SphereGeometry(r, 16, 12), leafMats[i % 3]);
+    const s = organicSphere(THREE, r, leafMats[i % 3], { seed: i + 3, bump: 0.12 });
     s.scale.y = 0.75;
     s.position.set(x, Math.max(y, CANOPY_BOTTOM + r * 0.75), z);
     treeGroup.add(s);
@@ -503,12 +509,13 @@ function buildAppleTree() {
 
 function buildOneBasket(x) {
   const group = new THREE.Group();
-  const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.6, 16), new THREE.MeshLambertMaterial({ color: 0x584332 }));
+  const stump = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.6, 28), new THREE.MeshLambertMaterial({ color: 0xa08a78, map: barkTexture(THREE, 0x584332) }));
+  group.add(softShadow(THREE, 0.32, 0.5));
   stump.position.y = 0.3;
   group.add(stump);
 
-  const rattan = new THREE.MeshStandardMaterial({ color: 0xb58451, roughness: 0.7, metalness: 0.05, side: THREE.DoubleSide });
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.13, 0.22, 24, 1, true), rattan);
+  const rattan = new THREE.MeshStandardMaterial({ color: 0xffffff, map: wickerTexture(THREE, 0xb58451), roughness: 0.75, metalness: 0.0, side: THREE.DoubleSide });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.13, 0.22, 40, 1, true), rattan);
   body.position.y = 0.71;
   const bottom = new THREE.Mesh(new THREE.CircleGeometry(0.13, 24), rattan);
   bottom.rotation.x = -Math.PI / 2;
@@ -516,7 +523,7 @@ function buildOneBasket(x) {
   group.add(body, bottom);
 
   const rimMat = new THREE.MeshStandardMaterial({ color: 0xc9945b, roughness: 0.5 });
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.016, 12, 32), rimMat);
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.19, 0.016, 16, 64), rimMat);
   rim.rotation.x = Math.PI / 2;
   rim.position.y = 0.82;
   group.add(rim);
@@ -851,16 +858,19 @@ function initThree() {
   camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 120);
 
   // Iluminación natural suave
-  scene.add(new THREE.HemisphereLight(0xfffaee, 0x7fa274, 1.15));
-  const sun = new THREE.DirectionalLight(0xfff5dd, 0.9);
+  hemiLight = new THREE.HemisphereLight(0xfff4dc, 0x7fa274, 1.15); // luz cálida
+  scene.add(hemiLight);
+  const sun = new THREE.DirectionalLight(0xffe7c2, 0.95); // sol de media tarde
   sun.position.set(5, 10, 3);
   scene.add(sun);
+  sunLight = sun;
 
   buildSky();
 
   anchor = new THREE.Group();
   scene.add(anchor);
   buildEnvironment();
+  buildGrassTufts();
   buildFireflies();
   buildSparks();
 
@@ -885,6 +895,19 @@ function initThree() {
     voice: new GuideVoice('audio/guia/'),
     enabled: () => !!(S.cfg && S.cfg.guide !== 'off'),
     progressEnabled: () => !!(S.cfg && S.cfg.guideProgress === 'on'),
+  });
+  breathScene = new BreathScene(THREE, anchor, {
+    audioCtx: () => audioCtx,
+    musicOn: () => !!(S.cfg && S.cfg.feedback !== 'visual'),
+    sfx,
+    onCycle: (n) => { S.spawned = n; if (guide && n % 4 === 0) guide.say('resp_bien_' + (1 + (n / 4 - 1) % 3), 'coach'); },
+    onWord: (name) => {
+      // Las primeras respiraciones, el guía las acompaña con la voz
+      const w = { inhale: 'resp_inhala', exhale: 'resp_exhala', hold: 'resp_sosten' }[name];
+      if (guide && w && breathScene.cycles < 3) guide.say(w, 'coach');
+    },
+    onStage: (st) => { if (st === 'birds' && guide) { guide.clear(); guide.say('pajaros_intro'); } },
+    onBird: (n) => { S.hits = n; if (guide) guide.say('pajaro_' + (1 + (n - 1) % 3), 'coach'); broadcastMetrics(); },
   });
   critters = new Critters(THREE, anchor, {
     // Manos activas del paciente (punta del índice o mando) y si están pellizcando/agarrando
@@ -987,10 +1010,10 @@ function buildSky() {
   canvas.height = 256;
   const ctx = canvas.getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0.0, '#98cbdf'); // Cenit celeste
-  grad.addColorStop(0.45, '#bfe1ea'); // Cielo medio
-  grad.addColorStop(0.85, '#e4f3f2'); // Horizonte suave
-  grad.addColorStop(1.0, '#fff4de'); // Luz dorada en el horizonte
+  grad.addColorStop(0.0, '#8cc3df'); // Cenit celeste
+  grad.addColorStop(0.45, '#bcdfe9'); // Cielo medio
+  grad.addColorStop(0.8, '#eaf2ea'); // Horizonte suave
+  grad.addColorStop(1.0, '#ffe8c6'); // Luz dorada cálida en el horizonte
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 16, 256);
 
@@ -999,23 +1022,29 @@ function buildSky() {
   const skyMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false });
   const sky = new THREE.Mesh(skyGeo, skyMat);
   scene.add(sky);
+  addClouds(THREE, scene); // nubes suaves y lejanas
 }
 
 function buildEnvironment() {
   // Pradera zen amplia
-  const groundMat = new THREE.MeshLambertMaterial({ color: 0x80b878 });
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(65, 48), groundMat);
+  const groundMat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: grassTexture(THREE, 0x80b878), vertexColors: true });
+  const groundGeo = new THREE.CircleGeometry(65, 96, 0, Math.PI * 2);
+  // Más vértices para que las manchas de color se vean suaves
+  const groundFine = new THREE.RingGeometry(0.01, 65, 160, 40);
+  tintGround(THREE, groundFine);
+  groundGeo.dispose();
+  const ground = new THREE.Mesh(groundFine, groundMat);
   ground.rotation.x = -Math.PI / 2;
   anchor.add(ground);
 
   // Sendero de piedras de río suaves y redondeadas
-  const stoneMat = new THREE.MeshLambertMaterial({ color: 0xc4cec6 });
+  const stoneMat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: stoneTexture(THREE, 0xc4cec6) });
   const stonePositions = [
     [0, -0.75, 0.28, 0.35], [0.38, -1.05, 0.24, 0.30], [-0.36, -1.15, 0.25, 0.32],
     [0.12, -1.45, 0.26, 0.33], [-0.28, -1.65, 0.22, 0.28], [0.42, -1.85, 0.26, 0.32], [-0.38, -2.05, 0.24, 0.30]
   ];
   stonePositions.forEach(([sx, sz, rx, rz], idx) => {
-    const stone = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), stoneMat);
+    const stone = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 16), stoneMat);
     stone.scale.set(rx, 0.05, rz);
     stone.position.set(sx, 0.02, sz);
     stone.rotation.y = idx * 0.8;
@@ -1023,12 +1052,13 @@ function buildEnvironment() {
   });
 
   // Farolillos zen japoneses de piedra (Tōrō) con luz cálida interior
-  const lanternMat = new THREE.MeshLambertMaterial({ color: 0x9ba6a0 });
+  const lanternMat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: stoneTexture(THREE, 0x9ba6a0) });
   const lanternLightMat = new THREE.MeshBasicMaterial({ color: 0xffe294 });
   [[-1.4, -1.7], [1.4, -1.9]].forEach(([lx, lz]) => {
     const lantern = new THREE.Group();
     // Base y poste
-    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 0.5, 8), lanternMat);
+    const post = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.12, 0.5, 20), lanternMat);
+    lantern.add(softShadow(THREE, 0.3, 0.5));
     post.position.y = 0.25;
     // Caja de luz con ranura
     const box = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.20, 0.22), lanternMat);
@@ -1046,38 +1076,41 @@ function buildEnvironment() {
   });
 
   // Estanque / Arroyo sereno curvado en el plano medio
-  const creekMat = new THREE.MeshLambertMaterial({ color: 0x62a49b, transparent: true, opacity: 0.75 });
+  const creekMat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: waterTexture(THREE, 0x62a49b), transparent: true, opacity: 0.8 });
   const creek = new THREE.Mesh(new THREE.PlaneGeometry(18, 4.5), creekMat);
   creek.rotation.x = -Math.PI / 2;
   creek.position.set(0, 0.01, -6.8);
   anchor.add(creek);
 
   // Rocas zen lisas de río
-  const rockMat = new THREE.MeshLambertMaterial({ color: 0x808d87 });
-  [[-2.0, -2.6, 0.45], [2.3, -2.8, 0.52], [-2.8, -4.4, 0.75], [3.3, -4.8, 0.85]].forEach(([rx, rz, s]) => {
-    const rock = new THREE.Mesh(new THREE.SphereGeometry(s, 16, 12), rockMat);
+  const rockMat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: stoneTexture(THREE, 0x808d87) });
+  [[-2.0, -2.6, 0.45], [2.3, -2.8, 0.52], [-2.8, -4.4, 0.75], [3.3, -4.8, 0.85]].forEach(([rx, rz, s], i) => {
+    const rock = organicSphere(THREE, s, rockMat, { seed: 20 + i, bump: 0.16 });
     rock.scale.set(1.3, 0.62, 1.1);
     rock.position.set(rx, s * 0.32, rz);
     anchor.add(rock);
+    const sh = softShadow(THREE, s * 1.6, 0.45, 1.3, 1.1);
+    sh.position.set(rx, 0.006, rz);
+    anchor.add(sh);
   });
 
   // Colinas suaves en el horizonte
-  const hillMat1 = new THREE.MeshLambertMaterial({ color: 0x709f7a });
-  const hillMat2 = new THREE.MeshLambertMaterial({ color: 0x628f6e });
+  const hillMat1 = new THREE.MeshLambertMaterial({ color: 0xffffff, map: leafTexture(THREE, 0x709f7a) });
+  const hillMat2 = new THREE.MeshLambertMaterial({ color: 0xffffff, map: leafTexture(THREE, 0x628f6e) });
   [
     [-22, -32, 13, hillMat1], [8, -36, 16, hillMat2], [28, -29, 11, hillMat1],
     [-12, -45, 18, hillMat2], [20, -44, 15, hillMat1], [-32, -24, 10, hillMat2]
   ].forEach(([x, z, r, mat]) => {
-    const h = new THREE.Mesh(new THREE.SphereGeometry(r, 24, 14), mat);
+    const h = organicSphere(THREE, r, mat, { seed: x + z, bump: 0.05, w: 40, h: 24 });
     h.position.set(x, -r * 0.58, z);
     anchor.add(h);
   });
 
   // Árboles estilizados (mezcla de bosque verde y cerezo sakura)
-  const trunkMat = new THREE.MeshLambertMaterial({ color: 0x7d5e41 });
-  const leafMatGreen1 = new THREE.MeshLambertMaterial({ color: 0x5a9a62 });
-  const leafMatGreen2 = new THREE.MeshLambertMaterial({ color: 0x6bb075 });
-  const leafMatSakura = new THREE.MeshLambertMaterial({ color: 0xebb1c6 });
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0xdcc8b2, map: barkTexture(THREE, 0x87674a) });
+  const leafMatGreen1 = new THREE.MeshLambertMaterial({ color: 0xffffff, map: leafTexture(THREE, 0x5a9a62) });
+  const leafMatGreen2 = new THREE.MeshLambertMaterial({ color: 0xffffff, map: leafTexture(THREE, 0x6bb075) });
+  const leafMatSakura = new THREE.MeshLambertMaterial({ color: 0xffffff, map: leafTexture(THREE, 0xebb1c6) });
 
   const treeData = [
     [-3.8, -5.5, leafMatGreen1, 1.0],
@@ -1093,15 +1126,17 @@ function buildEnvironment() {
 
   treeData.forEach(([tx, tz, lMat, scale]) => {
     const tree = new THREE.Group();
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * scale, 0.18 * scale, 1.6 * scale, 10), trunkMat);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.12 * scale, 0.18 * scale, 1.6 * scale, 20), trunkMat);
     trunk.position.y = 0.8 * scale;
     tree.add(trunk);
+    tree.add(softShadow(THREE, 1.3 * scale, 0.5));
 
-    const crown1 = new THREE.Mesh(new THREE.SphereGeometry(0.9 * scale, 16, 12), lMat);
+    const seed = Math.round((tx + tz) * 10);
+    const crown1 = organicSphere(THREE, 0.9 * scale, lMat, { seed: seed + 1, bump: 0.14 });
     crown1.position.y = 1.9 * scale;
-    const crown2 = new THREE.Mesh(new THREE.SphereGeometry(0.7 * scale, 14, 10), lMat);
+    const crown2 = organicSphere(THREE, 0.7 * scale, lMat, { seed: seed + 2, bump: 0.14 });
     crown2.position.set(0.35 * scale, 2.2 * scale, 0.15 * scale);
-    const crown3 = new THREE.Mesh(new THREE.SphereGeometry(0.65 * scale, 14, 10), lMat);
+    const crown3 = organicSphere(THREE, 0.65 * scale, lMat, { seed: seed + 3, bump: 0.14 });
     crown3.position.set(-0.35 * scale, 2.05 * scale, -0.2 * scale);
     tree.add(crown1, crown2, crown3);
 
@@ -1114,6 +1149,7 @@ function buildEnvironment() {
   const flowerPetalMat1 = new THREE.MeshLambertMaterial({ color: 0xb5a0d6 });
   const flowerPetalMat2 = new THREE.MeshLambertMaterial({ color: 0xfff6cf });
   const flowerPetalMat3 = new THREE.MeshLambertMaterial({ color: 0xf5bfb0 });
+  const flowerCenterMat = new THREE.MeshLambertMaterial({ color: 0xf2c94c });
 
   [
     [-1.2, -1.8, flowerPetalMat1], [1.3, -2.0, flowerPetalMat2],
@@ -1124,14 +1160,34 @@ function buildEnvironment() {
     for (let f = 0; f < 3; f++) {
       const ox = (f - 1) * 0.12;
       const oz = ((f % 2) - 0.5) * 0.1;
-      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.02, 0.22, 6), flowerStemMat);
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.016, 0.22, 10), flowerStemMat);
       stem.position.set(ox, 0.11, oz);
-      const head = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), pMat);
+      // Flor de 5 pétalos redondeados con centro amarillo
+      const head = new THREE.Group();
+      for (let k = 0; k < 5; k++) {
+        const pet = new THREE.Mesh(new THREE.SphereGeometry(0.028, 16, 12), pMat);
+        const a = (k / 5) * Math.PI * 2;
+        pet.scale.set(1, 0.35, 0.6);
+        pet.position.set(Math.cos(a) * 0.03, 0, Math.sin(a) * 0.03);
+        pet.rotation.y = -a;
+        head.add(pet);
+      }
+      head.add(new THREE.Mesh(new THREE.SphereGeometry(0.016, 14, 10), flowerCenterMat));
       head.position.set(ox, 0.23, oz);
       patch.add(stem, head);
     }
     patch.position.set(fx, 0, fz);
     anchor.add(patch);
+  });
+}
+
+// Matas de pasto alrededor del paciente, sin tapar el sendero, las mesas ni el arroyo
+function buildGrassTufts() {
+  addGrassTufts(THREE, anchor, {
+    count: 320, rMin: 1.0, rMax: 9,
+    avoid: (x, z) => (Math.abs(x) < 0.75 && z < -0.4 && z > -2.4) // sendero de piedras y manzano
+      || (z < -4.4 && z > -9.2) // arroyo
+      || Math.hypot(x, z) < 1.0, // zona de juego cerca del paciente
   });
 }
 
@@ -1653,7 +1709,9 @@ function phaseModel() {
         ? 'Toma la manzana (pellizco o gatillo) y déjala en el canasto izquierdo o derecho.'
         : cfg.gameMode === 'fair'
           ? 'Toma una pelota de la bandeja (pellizco o gatillo) y lánzala para botar los tarros. Suéltala para lanzar.'
-          : 'Toca las luces mágicas con tus dedos o con el mando, a tu propio ritmo.';
+          : cfg.gameMode === 'breath'
+            ? 'Sigue a la estrella con tu respiración. Después, mira hacia las luces para llamar a los pajaritos.'
+            : 'Toca las luces mágicas con tus dedos o con el mando, a tu propio ritmo.';
       if (cfg.gameMode === 'fair' && S.fairOk === false) {
         return {
           panel: 'menu',
@@ -1686,7 +1744,7 @@ function phaseModel() {
           title: '',
           titleSize: 22,
           lineSize: 26,
-          lines: [S.msgIdx === 0 && cfg.gameMode === 'fair' ? 'Toma una pelota y lánzala hacia los tarros.' : S.msgIdx === 0 && cfg.gameMode === 'apples' ? 'Toma la manzana y déjala en el canasto.' : MESSAGES[S.msgIdx]],
+          lines: [cfg.gameMode === 'breath' ? (breathScene && breathScene.stage === 'birds' ? 'Mira hacia la luz para llamar a los pajaritos.' : 'Sigue a la estrella con tu respiración.') : S.msgIdx === 0 && cfg.gameMode === 'fair' ? 'Toma una pelota y lánzala hacia los tarros.' : S.msgIdx === 0 && cfg.gameMode === 'apples' ? 'Toma la manzana y déjala en el canasto.' : MESSAGES[S.msgIdx]],
           buttons: [{ id: 'pause', label: 'Pausa', secondary: true }],
           cols: 1,
         },
@@ -1879,6 +1937,29 @@ function startAnotherSession(recalibrate) {
   }
 }
 
+// Fases en que la tablet puede recargar el visor sin perder datos de una sesión en curso
+const RELOAD_OK_PHASES = ['idle', 'settle', 'calib', 'ready', 'results', 'rest', 'bye'];
+
+// Recargar con la versión más nueva: guarda el registro, sale de VR, borra la copia sin internet y vuelve a cargar.
+// La copia sin internet se vuelve a guardar sola al cargar la página nueva.
+async function reloadFresh() {
+  try { commitRecord(); } catch (e) { /* ok */ }
+  try { if (session) await session.end(); } catch (e) { /* ok */ }
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.filter((k) => k.startsWith('calma-')).map((k) => caches.delete(k)));
+    }
+  } catch (e) { /* aunque falle, se recarga igual */ }
+  const u = new URL(location.href);
+  u.searchParams.set('v', Date.now().toString(36)); // evita que el navegador use una copia vieja
+  location.replace(u.toString());
+}
+
 let lastButtonActionTime = 0;
 function onButton(id, c, isRemote = false) {
   const now = performance.now();
@@ -1940,6 +2021,10 @@ function onButton(id, c, isRemote = false) {
       doRecenter(false);
       break;
     case 'done': commitRecord(); S.phase = 'rest'; break;
+    case 'reload':
+      // Desde la tablet: actualizar el visor a la versión más nueva. Nunca en medio de un juego o de la encuesta.
+      if (isRemote && RELOAD_OK_PHASES.includes(S.phase)) reloadFresh();
+      break;
     case 'leave':
       // Salir de realidad virtual: solo desde el resumen o la sala de descanso.
       if (['results', 'rest'].includes(S.phase)) {
@@ -1956,8 +2041,9 @@ function onButton(id, c, isRemote = false) {
 
 /* ================= Feria de juegos ================= */
 
-const MODE_ORDER = ['apples', 'lights', 'fair'];
-const MODE_NAME = { apples: '🍎 Manzano', lights: '🌸 Luces', fair: '🎪 Feria' };
+const MODE_ORDER = ['apples', 'lights', 'fair', 'breath'];
+const MODE_NAME = { apples: '🍎 Manzano', lights: '🌸 Luces', fair: '🎪 Feria', breath: '🌙 Respira' };
+const isBreath = () => !!(S.cfg && S.cfg.gameMode === 'breath');
 const isFair = () => !!(S.cfg && S.cfg.gameMode === 'fair');
 
 function fairHost() {
@@ -2132,6 +2218,10 @@ function startPlay() {
     if (!layoutFair()) { S.phase = 'ready'; return; }
     fairScene.start();
   }
+  if (isBreath() && breathScene) {
+    breathScene.configure(S.cfg, S.eyeH);
+    breathScene.start(performance.now());
+  }
   S.phase = 'play';
   S.nextSpawnAt = performance.now() + 1000;
 }
@@ -2142,6 +2232,7 @@ function handKey() { return S.cfg && (S.cfg.side === 'left' || S.cfg.side === 'b
 
 function guideInstruction() {
   if (!guide || !S.cfg) return;
+  if (isBreath()) { guide.say('inst_breath'); return; }
   guide.say('inst_' + (S.cfg.gameMode || 'apples') + '_' + handKey());
 }
 
@@ -2161,12 +2252,12 @@ function guideOnPhase(prev, phase) {
     guideInstruction();
   } else if (phase === 'play') {
     if (prev === 'pause') guide.sayNow('seguimos');
-    else { guide.say('comenzar'); S.guideMid = false; S.guideLast = false; }
+    else if (!isBreath()) { guide.say('comenzar'); S.guideMid = false; S.guideLast = false; }
   } else if (phase === 'pause') {
     guide.sayNow('pausa');
   } else if (phase === 'satisfaction') {
     guide.clear();
-    guide.say(S.endReason === 'reps' ? 'fin_meta' : S.endReason === 'time' ? 'fin_tiempo' : 'fin_otro');
+    guide.say(isBreath() ? 'resp_fin' : S.endReason === 'reps' ? 'fin_meta' : S.endReason === 'time' ? 'fin_tiempo' : 'fin_otro');
     guide.say('encuesta');
   } else if (phase === 'rest') {
     guide.say('descanso');
@@ -2189,6 +2280,37 @@ function guideMiss() {
   guide.miss(isFair());
 }
 
+/* ================= Respira: mirada y atardecer ================= */
+
+const _gq = { a: null, b: null, v: null };
+// Hacia dónde mira la cabeza, en grados, respecto del frente del jardín (positivo = derecha)
+function headGaze() {
+  if (!camera || !anchor) return null;
+  if (!_gq.a) { _gq.a = new THREE.Quaternion(); _gq.b = new THREE.Quaternion(); _gq.v = new THREE.Vector3(); }
+  camera.updateMatrixWorld(true);
+  camera.getWorldQuaternion(_gq.a);
+  anchor.getWorldQuaternion(_gq.b).invert();
+  const d = _gq.v.set(0, 0, -1).applyQuaternion(_gq.a).applyQuaternion(_gq.b);
+  return { yawDeg: Math.atan2(d.x, -d.z) * 180 / Math.PI, pitchDeg: Math.asin(Math.max(-1, Math.min(1, d.y))) * 180 / Math.PI };
+}
+
+const DAY = { bg: 0xd2ebed, hemi: 1.15, sun: 0.95 };
+const DUSK = { bg: 0xaab6d9, hemi: 0.72, sun: 0.4 };
+let duskK = 0;
+let _c1 = null; let _c2 = null;
+function duskTo(target, dt) {
+  if (!scene) return;
+  const before = duskK;
+  duskK += (target - duskK) * Math.min(1, (dt || 0.016) * 0.6);
+  if (Math.abs(duskK - before) < 1e-4 && (duskK === 0 || duskK === 1)) return;
+  if (Math.abs(target - duskK) < 0.002) duskK = target;
+  if (!_c1) { _c1 = new THREE.Color(DAY.bg); _c2 = new THREE.Color(DUSK.bg); }
+  if (scene.background && scene.background.isColor) scene.background.copy(_c1).lerp(_c2, duskK);
+  if (scene.fog) scene.fog.color.copy(_c1).lerp(_c2, duskK);
+  if (hemiLight) hemiLight.intensity = DAY.hemi + (DUSK.hemi - DAY.hemi) * duskK;
+  if (sunLight) sunLight.intensity = DAY.sun + (DUSK.sun - DAY.sun) * duskK;
+}
+
 function pausePlay() {
   if (S.phase !== 'play') return;
   S.phase = 'pause';
@@ -2207,6 +2329,7 @@ function resumePlay() {
 function endPlay(early, reason) {
   // Feria: se limpia la zona (pelotas del suelo, tarros de vuelta, bandejas llenas).
   if (fairScene) fairScene.clear();
+  if (breathScene) breathScene.stop();
   if (orb) orb.visible = false;
   if (sparkPoints) sparkPoints.visible = false;
   if (targetAppleGroup) targetAppleGroup.visible = false;
@@ -2289,42 +2412,17 @@ function chime() {
   });
 }
 
-// Armónicos binaurales de calma tipo cuenco tibetano
+// Ambiente sonoro del jardín: brisa suave y pajaritos lejanos (antes era un zumbido grave constante,
+// que se sentía como un motor y ponía en alerta). En Respira se apaga y suena su propia música.
+let nature = null;
 function startAmbient() {
   if (!audioCtx || !S.cfg.ambient) return;
-  stopAmbient();
-  const g = audioCtx.createGain();
-  g.gain.value = 0.0001;
-  g.connect(audioCtx.destination);
-  const oscs = [[130.81, 0.45], [196.0, 0.3], [261.63, 0.15], [329.63, 0.08]].map(([f, a]) => {
-    const o = audioCtx.createOscillator();
-    const og = audioCtx.createGain();
-    o.type = 'sine';
-    o.frequency.value = f;
-    og.gain.value = a;
-    o.connect(og).connect(g);
-    o.start();
-    return o;
-  });
-  const lfo = audioCtx.createOscillator();
-  const lg = audioCtx.createGain();
-  lfo.frequency.value = 0.05; // ritmo de respiración lento (ondas theta de calma)
-  lg.gain.value = 0.012;
-  lfo.connect(lg).connect(g.gain);
-  lfo.start();
-  g.gain.exponentialRampToValueAtTime(0.038, audioCtx.currentTime + 3.5);
-  ambient = { g, oscs, lfo };
+  if (!nature) nature = new NatureAmbience(() => audioCtx);
+  nature.start();
 }
 
 function stopAmbient() {
-  if (!ambient || !audioCtx) { ambient = null; return; }
-  try {
-    const t = audioCtx.currentTime;
-    ambient.g.gain.cancelScheduledValues(t);
-    ambient.g.gain.setTargetAtTime(0.0001, t, 0.2);
-    ambient.oscs.concat([ambient.lfo]).forEach((o) => o.stop(t + 1));
-  } catch (e) { /* ya detenido */ }
-  ambient = null;
+  if (nature) nature.stop();
 }
 
 function update(dt, now) {
@@ -2344,7 +2442,8 @@ function update(dt, now) {
 
   if (S.phase === 'settle' && now >= S.settleUntil) {
     placeAnchor();
-    S.phase = 'calib';
+    // Respira no usa el alcance del brazo: pasa directo a "listo"
+    S.phase = isBreath() ? 'ready' : 'calib';
   }
   if (S.phase === 'bye' && now >= S.byeAt && session) {
     const s = session;
@@ -2450,6 +2549,14 @@ function update(dt, now) {
   if (basketGroup) basketGroup.visible = isApplesMode && !waitingScene;
   // La feria solo se ve mientras se juega (o en pausa). En escalas, resumen y descanso se oculta para que no se mezcle con los diálogos.
   if (fairScene) fairScene.setVisible(isFairMode && fairScene.ready() && ['play', 'pause'].includes(S.phase));
+  // Respira: estrella y pajaritos solo mientras se juega; el jardín se atenúa a un atardecer suave y vuelve después.
+  const breathOn = isBreath() && ['play', 'pause'].includes(S.phase);
+  if (breathScene) breathScene.setVisible(breathOn);
+  if (nature && S.cfg && S.cfg.ambient && session) {
+    if (breathOn && nature.on) nature.stop();
+    else if (!breathOn && !nature.on) nature.start();
+  }
+  duskTo(breathOn ? 1 : 0, dt);
 
   if (S.phase !== 'play') return;
 
@@ -2463,6 +2570,15 @@ function update(dt, now) {
   S.activeMs += dt * 1000;
   if (S.activeMs >= S.cfg.minutes * 60000 && !S.heldApple && !S.droppingApple && !(isFairMode && fairScene.holding())) {
     endPlay(false, 'time');
+    return;
+  }
+
+  // ===================== MODO 4: RESPIRA (relajación) =====================
+  // Termina solo por tiempo (no hay meta de repeticiones). Aciertos = pajaritos que llegaron; intentos = respiraciones.
+  if (isBreath()) {
+    if (orb) orb.visible = false;
+    if (targetAppleGroup) targetAppleGroup.visible = false;
+    if (breathScene) breathScene.step(dt, headGaze());
     return;
   }
 
@@ -2723,5 +2839,5 @@ function loop() {
 
 initForm();
 
-export const APP_VERSION = '0.9.4';
-export const __test = { S, update, onButton, phaseModel, enterVR, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; } };
+export const APP_VERSION = '0.10.4';
+export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; } };

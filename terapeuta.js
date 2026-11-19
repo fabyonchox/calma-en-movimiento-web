@@ -2,7 +2,7 @@ import { getSyncServerUrl, getSessionCode } from './sync-config.js';
 import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure } from './logic.js';
 import { PatientsPanel } from './pacientes.js';
 
-const APP_VERSION = '0.9.4';
+const APP_VERSION = '0.10.4';
 
 let ws = null;
 let currentRoom = getSessionCode() || 'HOSPITAL-1';
@@ -56,11 +56,12 @@ const mirrorButtonsContainer = $('mirrorButtonsContainer');
 
 const SIDE_ES = { right: 'Derecho', left: 'Izquierdo', both: 'Bilateral' };
 const POS_ES = { sitting: 'Sentado', standing: 'De pie' };
-const MODE_ES = { apples: 'Cosecha del Manzano', lights: 'Jardín de Luces', fair: 'Feria de Juegos' };
+const MODE_ES = { apples: 'Cosecha del Manzano', lights: 'Jardín de Luces', fair: 'Feria de Juegos', breath: 'Respira (relajación)' };
 const CFG_FIELDS = {
   gameMode: 'cfgMode', zone: 'cfgZone', side: 'cfgSide', position: 'cfgPos',
   minutes: 'cfgMin', reps: 'cfgReps', dwell: 'cfgDwell', size: 'cfgSize', feedback: 'cfgFeedback',
   guide: 'cfgGuide', guideProgress: 'cfgGuideProgress', fairDist: 'cfgFairDist',
+  breathPattern: 'cfgBreathPattern', neckRange: 'cfgNeckRange', breathContent: 'cfgBreathContent',
 };
 
 // Las zonas salen de la misma lista que usa el visor (así lo que se elige aquí es lo que se registra allá).
@@ -309,6 +310,7 @@ function renderMirrorState(state) {
   currentPhaseBadge.textContent = 'Fase: ' + String(state.phase || '-').toUpperCase();
   updateSessionNote();
   updatePauseButton();
+  updateRoomBanner();
 
   // El visor salió de realidad virtual: se muestra un cierre claro y la opción de preparar otra sesión.
   if (currentPhase === 'idle') {
@@ -458,6 +460,15 @@ function updatePauseButton() {
   b.textContent = currentPhase === 'pause' ? '▶ Reanudar' : '⏸ Pausar';
 }
 
+// Fases del visor en que se puede recargar sin perder datos (igual que en game.js)
+const RELOAD_OK_PHASES = ['idle', 'settle', 'calib', 'ready', 'results', 'rest', 'bye'];
+
+function reloadHeadset() {
+  if (!RELOAD_OK_PHASES.includes(currentPhase)) return;
+  if (!confirm('¿Recargar el visor con la versión nueva?\n\nEl visor saldrá un momento de la realidad virtual. Después, en el Quest, hay que tocar de nuevo «Entrar» para volver al jardín.')) return;
+  triggerRemoteButton('reload');
+}
+
 // Ejecutar comando remoto al visor
 function triggerRemoteButton(buttonId) {
   if (!isConnected) {
@@ -481,13 +492,19 @@ function renderMetrics(m) {
 
   const reps = isNum(cm.reps) && cm.reps > 0 ? cm.reps : DEFAULTS.reps;
   const hits = isNum(cm.hits) ? cm.hits : 0;
-  const pct = progressPercent(hits, reps);
+  const breath = !!(cm.config && cm.config.gameMode === 'breath');
+  // Respira no tiene meta de repeticiones: el progreso es el tiempo; se muestran respiraciones y pajaritos.
+  const totalSec = isNum(cm.minutes) && cm.minutes > 0 ? cm.minutes * 60 : 0;
+  const pct = breath ? (totalSec ? Math.min(100, Math.round(((cm.activeSec || 0) / totalSec) * 100)) : 0) : progressPercent(hits, reps);
 
-  // Progreso de aciertos respecto de la meta de repeticiones
-  if ($('progressPercent')) $('progressPercent').textContent = `${pct}% (${hits} / ${reps})`;
+  if ($('progressPercent')) {
+    $('progressPercent').textContent = breath
+      ? `${pct}% del tiempo · ${cm.spawned || 0} respiraciones · ${hits} pajaritos`
+      : `${pct}% (${hits} / ${reps})`;
+  }
   if ($('progressBarFill')) $('progressBarFill').style.width = pct + '%';
 
-  $('chipHits').textContent = `${hits} / ${reps}`;
+  $('chipHits').textContent = breath ? `${hits} pajaritos` : `${hits} / ${reps}`;
   const limit = isNum(cm.minutes) && cm.minutes > 0 ? ' / ' + formatTime(cm.minutes * 60) : '';
   $('chipTime').textContent = formatTime(cm.activeSec || 0) + limit;
   $('chipMaxReach').textContent = `${(cm.maxReach || 0).toFixed(2)} m`;
@@ -788,9 +805,21 @@ function updateRoomBanner() {
     const seen = isHeadsetOnline && currentMetrics.config; // ya llegó información del visor
     if (!seen) { ver.textContent = ''; ver.dataset.warn = '0'; }
     else if (currentMetrics.version === APP_VERSION) { ver.textContent = 'Visor v' + APP_VERSION; ver.dataset.warn = '0'; }
-    else { ver.textContent = '⚠ Visor desactualizado' + (currentMetrics.version ? ' (v' + currentMetrics.version + ')' : '') + ': recarga la página en el Quest'; ver.dataset.warn = '1'; }
+    else { ver.textContent = '⚠ Visor desactualizado' + (currentMetrics.version ? ' (v' + currentMetrics.version + ')' : ''); ver.dataset.warn = '1'; }
+  }
+  // Botón para actualizar el visor desde aquí (solo cuando no hay un juego ni una encuesta en curso)
+  const rb = $('rbReload');
+  if (rb) {
+    const outdated = ver && ver.dataset.warn === '1';
+    rb.hidden = !outdated;
+    const ok = RELOAD_OK_PHASES.includes(currentPhase);
+    rb.disabled = !ok;
+    rb.title = ok ? 'Recarga la página del visor con la versión más nueva' : 'Disponible al terminar el juego y la encuesta';
+    rb.textContent = ok ? '🔄 Recargar visor' : '🔄 Recargar visor (al terminar la sesión)';
   }
 }
+
+if ($('rbReload')) $('rbReload').onclick = reloadHeadset;
 
 document.querySelectorAll('.rb-pill').forEach((b) => {
   b.onclick = () => {
