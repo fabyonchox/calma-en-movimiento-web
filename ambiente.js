@@ -31,7 +31,7 @@ function toTexture(T, canvas, repeatX = 1, repeatY = 1) {
   t.wrapS = t.wrapT = T.RepeatWrapping;
   t.repeat.set(repeatX, repeatY);
   if (T.SRGBColorSpace) t.colorSpace = T.SRGBColorSpace;
-  t.anisotropy = 4;
+  t.anisotropy = 8;
   return t;
 }
 
@@ -45,17 +45,17 @@ export function grassTexture(T, base = 0x80b878) {
   if (c) {
     const g = c.getContext('2d'); const r = rng(7);
     g.fillStyle = hex(base); g.fillRect(0, 0, 256, 256);
-    for (let i = 0; i < 90; i++) { // manchas grandes y difusas
+    for (let i = 0; i < 110; i++) { // manchas grandes y difusas (luz y sombra)
       const x = r() * 256; const y = r() * 256; const rad = 18 + r() * 40;
       const grd = g.createRadialGradient(x, y, 0, x, y, rad);
-      grd.addColorStop(0, r() > 0.5 ? 'rgba(255,255,220,0.10)' : 'rgba(20,60,20,0.10)');
+      grd.addColorStop(0, r() > 0.5 ? 'rgba(255,250,200,0.16)' : 'rgba(15,55,20,0.18)');
       grd.addColorStop(1, 'rgba(0,0,0,0)');
       g.fillStyle = grd; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
     }
-    for (let i = 0; i < 2600; i++) { // hojitas
-      const x = r() * 256; const y = r() * 256; const len = 2 + r() * 5; const a = -Math.PI / 2 + (r() - 0.5) * 0.9;
-      g.strokeStyle = shade(base, 0.78 + r() * 0.45);
-      g.globalAlpha = 0.55; g.lineWidth = 1;
+    for (let i = 0; i < 3400; i++) { // hojitas
+      const x = r() * 256; const y = r() * 256; const len = 2 + r() * 6; const a = -Math.PI / 2 + (r() - 0.5) * 0.9;
+      g.strokeStyle = shade(base, 0.62 + r() * 0.7);
+      g.globalAlpha = 0.65; g.lineWidth = 1 + (r() > 0.85 ? 1 : 0);
       g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * len, y + Math.sin(a) * len); g.stroke();
     }
     g.globalAlpha = 1;
@@ -229,10 +229,10 @@ function cloudTexture(T) {
   const c = makeCanvas(256, 128);
   if (c) {
     const g = c.getContext('2d'); const r = rng(17);
-    for (let i = 0; i < 26; i++) {
-      const x = 40 + r() * 176; const y = 50 + r() * 40 - Math.abs(x - 128) * 0.15; const rad = 18 + r() * 30;
+    for (let i = 0; i < 34; i++) {
+      const x = 36 + r() * 184; const y = 52 + r() * 36 - Math.abs(x - 128) * 0.18; const rad = 20 + r() * 32;
       const grd = g.createRadialGradient(x, y, 0, x, y, rad);
-      grd.addColorStop(0, 'rgba(255,255,255,0.55)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
+      grd.addColorStop(0, 'rgba(255,255,255,0.85)'); grd.addColorStop(0.6, 'rgba(255,252,245,0.45)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
       g.fillStyle = grd; g.fillRect(x - rad, y - rad, rad * 2, rad * 2);
     }
   }
@@ -243,7 +243,10 @@ function cloudTexture(T) {
 export function addClouds(T, parent) {
   const tex = cloudTexture(T);
   const group = new T.Group();
-  const spots = [[-40, 30, -70, 34], [10, 36, -80, 42], [48, 28, -60, 30], [-70, 26, -20, 28], [72, 32, -10, 32], [-20, 40, 60, 36], [40, 34, 70, 30]];
+  const spots = [
+    [-40, 22, -70, 40], [10, 26, -80, 50], [48, 20, -62, 36], [-14, 16, -66, 30], [28, 14, -70, 28],
+    [-70, 20, -24, 34], [72, 24, -12, 38], [-20, 30, 60, 40], [40, 26, 70, 34], [-62, 18, 40, 30], [66, 16, 36, 30],
+  ];
   spots.forEach(([x, y, z, s]) => {
     const sp = new T.Sprite(new T.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false, opacity: 0.9 }));
     sp.position.set(x, y, z);
@@ -252,4 +255,75 @@ export function addClouds(T, parent) {
   });
   parent.add(group);
   return group;
+}
+
+/* ---------------- Matas de pasto ---------------- */
+
+function tuftTexture(T) {
+  if (cache.tuft !== undefined) return cache.tuft;
+  const c = makeCanvas(64, 64);
+  if (c) {
+    const g = c.getContext('2d'); const r = rng(29);
+    for (let i = 0; i < 22; i++) {
+      const x0 = 18 + r() * 28; const lean = (r() - 0.5) * 26; const h = 30 + r() * 30;
+      g.strokeStyle = shade(0x6fae67, 0.7 + r() * 0.6); g.lineWidth = 2 + r() * 2; g.lineCap = 'round';
+      g.beginPath(); g.moveTo(x0, 64); g.quadraticCurveTo(x0 + lean * 0.3, 64 - h * 0.6, x0 + lean, 64 - h); g.stroke();
+    }
+  }
+  const t = c ? new T.CanvasTexture(c) : null;
+  if (t && T.SRGBColorSpace) t.colorSpace = T.SRGBColorSpace;
+  return (cache.tuft = t);
+}
+
+// Matas de pasto alrededor (una sola malla repetida: liviano para el Quest).
+// avoid(x, z) -> true si en ese punto no debe haber pasto (sendero, mesas, cerca del paciente).
+export function addGrassTufts(T, parent, { count = 260, rMin = 0.9, rMax = 9, seed = 41, avoid = () => false } = {}) {
+  const tex = tuftTexture(T);
+  // Dos planos cruzados por mata
+  const geo = new T.BufferGeometry();
+  const w = 0.22; const h = 0.2;
+  const v = []; const uv = []; const idx = [];
+  [0, Math.PI / 2].forEach((a, k) => {
+    const cx = Math.cos(a) * w / 2; const cz = Math.sin(a) * w / 2;
+    const b = k * 4;
+    v.push(-cx, 0, -cz, cx, 0, cz, cx, h, cz, -cx, h, -cz);
+    uv.push(0, 0, 1, 0, 1, 1, 0, 1);
+    idx.push(b, b + 1, b + 2, b, b + 2, b + 3);
+  });
+  geo.setAttribute('position', new T.Float32BufferAttribute(v, 3));
+  geo.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
+  geo.setIndex(idx);
+  geo.computeVertexNormals();
+  const mat = new T.MeshLambertMaterial({ map: tex, transparent: true, alphaTest: 0.35, side: T.DoubleSide, depthWrite: true });
+  const mesh = new T.InstancedMesh(geo, mat, count);
+  const r = rng(seed);
+  const m = new T.Matrix4(); const q = new T.Quaternion(); const sc = new T.Vector3(); const pos = new T.Vector3(); const up = new T.Vector3(0, 1, 0);
+  let n = 0; let tries = 0;
+  while (n < count && tries < count * 20) {
+    tries++;
+    const ang = r() * Math.PI * 2; const rad = rMin + Math.sqrt(r()) * (rMax - rMin);
+    const x = Math.sin(ang) * rad; const z = -Math.cos(ang) * rad;
+    if (avoid(x, z)) continue;
+    const s = 0.7 + r() * 0.8;
+    pos.set(x, 0, z); q.setFromAxisAngle(up, r() * Math.PI); sc.set(s, s * (0.8 + r() * 0.5), s);
+    m.compose(pos, q, sc);
+    mesh.setMatrixAt(n++, m);
+  }
+  mesh.count = n;
+  mesh.instanceMatrix.needsUpdate = true;
+  parent.add(mesh);
+  return mesh;
+}
+
+// Manchas de color en el suelo (zonas más claras y más oscuras), pintadas en los vértices
+export function tintGround(T, geometry, seed = 3) {
+  const p = geometry.attributes.position;
+  const col = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i); const y = p.getY(i);
+    const n = Math.sin(x * 0.21 + seed) * Math.cos(y * 0.17 - seed) + 0.5 * Math.sin((x + y) * 0.43 + seed * 2);
+    const k = 0.9 + 0.12 * n; // 0,72 – 1,08 aprox.
+    col[i * 3] = Math.min(1, k * 1.02); col[i * 3 + 1] = Math.min(1, k); col[i * 3 + 2] = Math.min(1, k * 0.9);
+  }
+  geometry.setAttribute('color', new T.BufferAttribute(col, 3));
 }

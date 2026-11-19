@@ -3,7 +3,7 @@ import { FairScene } from './feria_escena.js';
 import { Guide, GuideVoice } from './guia.js';
 import { Sfx } from './sfx.js';
 import { BreathScene } from './respira.js';
-import { grassTexture, barkTexture, leafTexture, stoneTexture, waterTexture, wickerTexture, softShadow, organicSphere, addClouds } from './ambiente.js';
+import { grassTexture, barkTexture, leafTexture, stoneTexture, waterTexture, wickerTexture, softShadow, organicSphere, addClouds, addGrassTufts, tintGround } from './ambiente.js';
 import {
   DEFAULTS, ZONES, SIZES, MESSAGES, normalizeConfig, mergeConfig, REMOTE_KEYS, effectiveDistances, pickTarget,
   horizontalDistance, distance, formatTime, newRecord, buildCSV, buildSummary, sustainedReach,
@@ -464,7 +464,7 @@ function buildAppleTree() {
   treeGroup = new THREE.Group();
   treeGroup.position.set(0, 0, -1.6);
 
-  const trunkMat = new THREE.MeshLambertMaterial({ color: 0xb59a82, map: barkTexture(THREE, 0x6e5139) });
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0xd8c3ad, map: barkTexture(THREE, 0x7a5a3f) });
   const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.25, 2.1, 24), trunkMat);
   trunk.position.y = 1.05;
   treeGroup.add(trunk);
@@ -857,9 +857,9 @@ function initThree() {
   camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 120);
 
   // Iluminación natural suave
-  hemiLight = new THREE.HemisphereLight(0xfffaee, 0x7fa274, 1.15);
+  hemiLight = new THREE.HemisphereLight(0xfff4dc, 0x7fa274, 1.15); // luz cálida
   scene.add(hemiLight);
-  const sun = new THREE.DirectionalLight(0xfff5dd, 0.9);
+  const sun = new THREE.DirectionalLight(0xffe7c2, 0.95); // sol de media tarde
   sun.position.set(5, 10, 3);
   scene.add(sun);
   sunLight = sun;
@@ -869,6 +869,7 @@ function initThree() {
   anchor = new THREE.Group();
   scene.add(anchor);
   buildEnvironment();
+  buildGrassTufts();
   buildFireflies();
   buildSparks();
 
@@ -1008,10 +1009,10 @@ function buildSky() {
   canvas.height = 256;
   const ctx = canvas.getContext('2d');
   const grad = ctx.createLinearGradient(0, 0, 0, 256);
-  grad.addColorStop(0.0, '#98cbdf'); // Cenit celeste
-  grad.addColorStop(0.45, '#bfe1ea'); // Cielo medio
-  grad.addColorStop(0.85, '#e4f3f2'); // Horizonte suave
-  grad.addColorStop(1.0, '#fff4de'); // Luz dorada en el horizonte
+  grad.addColorStop(0.0, '#8cc3df'); // Cenit celeste
+  grad.addColorStop(0.45, '#bcdfe9'); // Cielo medio
+  grad.addColorStop(0.8, '#eaf2ea'); // Horizonte suave
+  grad.addColorStop(1.0, '#ffe8c6'); // Luz dorada cálida en el horizonte
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, 16, 256);
 
@@ -1025,8 +1026,13 @@ function buildSky() {
 
 function buildEnvironment() {
   // Pradera zen amplia
-  const groundMat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: grassTexture(THREE, 0x80b878) });
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(65, 96), groundMat);
+  const groundMat = new THREE.MeshLambertMaterial({ color: 0xffffff, map: grassTexture(THREE, 0x80b878), vertexColors: true });
+  const groundGeo = new THREE.CircleGeometry(65, 96, 0, Math.PI * 2);
+  // Más vértices para que las manchas de color se vean suaves
+  const groundFine = new THREE.RingGeometry(0.01, 65, 160, 40);
+  tintGround(THREE, groundFine);
+  groundGeo.dispose();
+  const ground = new THREE.Mesh(groundFine, groundMat);
   ground.rotation.x = -Math.PI / 2;
   anchor.add(ground);
 
@@ -1100,7 +1106,7 @@ function buildEnvironment() {
   });
 
   // Árboles estilizados (mezcla de bosque verde y cerezo sakura)
-  const trunkMat = new THREE.MeshLambertMaterial({ color: 0xc0a68e, map: barkTexture(THREE, 0x7d5e41) });
+  const trunkMat = new THREE.MeshLambertMaterial({ color: 0xdcc8b2, map: barkTexture(THREE, 0x87674a) });
   const leafMatGreen1 = new THREE.MeshLambertMaterial({ color: 0xffffff, map: leafTexture(THREE, 0x5a9a62) });
   const leafMatGreen2 = new THREE.MeshLambertMaterial({ color: 0xffffff, map: leafTexture(THREE, 0x6bb075) });
   const leafMatSakura = new THREE.MeshLambertMaterial({ color: 0xffffff, map: leafTexture(THREE, 0xebb1c6) });
@@ -1171,6 +1177,16 @@ function buildEnvironment() {
     }
     patch.position.set(fx, 0, fz);
     anchor.add(patch);
+  });
+}
+
+// Matas de pasto alrededor del paciente, sin tapar el sendero, las mesas ni el arroyo
+function buildGrassTufts() {
+  addGrassTufts(THREE, anchor, {
+    count: 320, rMin: 1.0, rMax: 9,
+    avoid: (x, z) => (Math.abs(x) < 0.75 && z < -0.4 && z > -2.4) // sendero de piedras y manzano
+      || (z < -4.4 && z > -9.2) // arroyo
+      || Math.hypot(x, z) < 1.0, // zona de juego cerca del paciente
   });
 }
 
@@ -2250,7 +2266,7 @@ function headGaze() {
   return { yawDeg: Math.atan2(d.x, -d.z) * 180 / Math.PI, pitchDeg: Math.asin(Math.max(-1, Math.min(1, d.y))) * 180 / Math.PI };
 }
 
-const DAY = { bg: 0xd2ebed, hemi: 1.15, sun: 0.9 };
+const DAY = { bg: 0xd2ebed, hemi: 1.15, sun: 0.95 };
 const DUSK = { bg: 0xaab6d9, hemi: 0.72, sun: 0.4 };
 let duskK = 0;
 let _c1 = null; let _c2 = null;
@@ -2816,5 +2832,5 @@ function loop() {
 
 initForm();
 
-export const APP_VERSION = '0.10.1';
+export const APP_VERSION = '0.10.2';
 export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; } };
