@@ -9,7 +9,7 @@ export const SIZES = { small: 0.05, medium: 0.075, large: 0.10 };
 // Valores iniciales "seguros" de la Fase 4. La permanencia (10 s) y el rango lateral (0,5 m)
 // son valores medios/de la guía; el equipo debe confirmarlos.
 export const DEFAULTS = {
-  gameMode: 'apples', // apples | lights | fair
+  gameMode: 'apples', // apples | lights | fair | breath (Respira)
   code: '',
   zone: 'Hombro',
   side: 'right', // right | left | both
@@ -29,6 +29,10 @@ export const DEFAULTS = {
   guide: 'on', // guía (luz con carita): 'on' | 'off'
   guideProgress: 'off', // ventanita '3 de 10' junto al guía en el visor: 'on' | 'off'
   fairDist: 'mid', // Feria: distancia de los tarros: 'near' (92 % del alcance) | 'mid' (100 %) | 'far' (115 %)
+  // Respira (opciones de diseño; el equipo define cuáles usar): ver respira_logica.js
+  breathPattern: '4-6',
+  neckRange: 'suave',
+  breathContent: 'ambos',
 };
 
 // Mensajes neutros (Fase 5). Sin lenguaje competitivo ni punitivo.
@@ -45,7 +49,7 @@ const num = (v, d) => (Number.isFinite(Number(v)) && v !== '' && v !== null ? Nu
 
 export function normalizeConfig(raw = {}) {
   const c = { ...DEFAULTS, ...raw };
-  c.gameMode = ['apples', 'lights', 'fair'].includes(c.gameMode) ? c.gameMode : 'apples';
+  c.gameMode = ['apples', 'lights', 'fair', 'breath'].includes(c.gameMode) ? c.gameMode : 'apples';
   c.code = String(c.code || '').replace(/[^\w\- ]/g, '').trim().slice(0, 20);
   if (!ZONES.includes(c.zone)) c.zone = DEFAULTS.zone;
   if (!['right', 'left', 'both'].includes(c.side)) c.side = DEFAULTS.side;
@@ -60,6 +64,9 @@ export function normalizeConfig(raw = {}) {
   c.guide = c.guide === 'off' || c.guide === false ? 'off' : 'on';
   c.guideProgress = c.guideProgress === 'on' || c.guideProgress === true ? 'on' : 'off';
   c.fairDist = ['near', 'mid', 'far'].includes(c.fairDist) ? c.fairDist : DEFAULTS.fairDist;
+  c.breathPattern = ['4-6', '5-5', '4-2-6', 'caja'].includes(c.breathPattern) ? c.breathPattern : DEFAULTS.breathPattern;
+  c.neckRange = ['suave', 'medio', 'amplio'].includes(c.neckRange) ? c.neckRange : DEFAULTS.neckRange;
+  c.breathContent = ['ambos', 'estrella', 'pajaros'].includes(c.breathContent) ? c.breathContent : DEFAULTS.breathContent;
 
   c.minH = clamp(num(c.minH, DEFAULTS.minH), 0.3, 2.0);
   c.maxH = clamp(num(c.maxH, DEFAULTS.maxH), 0.4, 2.2);
@@ -76,7 +83,7 @@ export function normalizeConfig(raw = {}) {
 }
 
 // Campos que la tablet del evaluador puede cambiar en el visor. Cualquier otro campo se ignora.
-export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'guide', 'guideProgress', 'fairDist'];
+export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'guide', 'guideProgress', 'fairDist', 'breathPattern', 'neckRange', 'breathContent'];
 
 // Mezcla la configuración actual del visor con la que manda la tablet y la normaliza.
 export function mergeConfig(current, incoming) {
@@ -354,7 +361,7 @@ export function recordToRow(r) {
   return [
     cell(r.date), cell(r.time), cell(r.code), cell(r.zone), cell(SIDE_ES[r.side] || r.side), cell(POS_ES[r.position] || r.position),
     cell(r.spawned), cell(r.hits), cell(r.minutes * 60, 1), cell(r.activeSec, 1),
-    r.hits > 0 ? cell(r.avgReach, 2) : '', r.hits > 0 ? cell(r.maxReach, 2) : '', // sin aciertos no hay alcance: vacío, no 0
+    r.hits > 0 && r.gameMode !== 'breath' ? cell(r.avgReach, 2) : '', r.hits > 0 && r.gameMode !== 'breath' ? cell(r.maxReach, 2) : '', // sin aciertos (o en Respira) no hay alcance: vacío, no 0
     r.comfortReach === null ? '' : cell(r.comfortReach, 2), cell(r.pauses), cell(r.painBefore), cell(r.painAfter),
     cell(r.satisfaction), r.adverse === null ? '' : cell(!!r.adverse), cell(r.adverseDesc), cell(!!r.endedEarly),
     cell(END_REASONS[r.endReason] || ''),

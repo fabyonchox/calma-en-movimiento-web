@@ -527,6 +527,7 @@
             <option value="apples">🍎 Cosecha del Manzano (Alcance + Agarre + Transporte)</option>
             <option value="lights">🌸 Jardín de Luces (Alcance y Toque Espacial)</option>
             <option value="fair">🎪 Feria de Juegos (Tomar y Lanzar pelotas a los tarros)</option>
+            <option value="breath">🌙 Respira (relajación: estrella que respira y pajaritos)</option>
           </select>
         </div>
 
@@ -595,6 +596,34 @@
             </select>
           </div>
         </div>
+        <div style="margin-bottom:12px;">
+          <label for="cfgBreathContent">Respira: contenido</label>
+          <select id="cfgBreathContent">
+            <option value="ambos" selected>Estrella y luego pajaritos</option>
+            <option value="estrella">Solo la estrella (respiración)</option>
+            <option value="pajaros">Solo los pajaritos (giro de cabeza)</option>
+          </select>
+        </div>
+        <div class="form-row" style="margin-bottom:12px;">
+          <div>
+            <label for="cfgBreathPattern">Respira: ritmo de la estrella</label>
+            <select id="cfgBreathPattern">
+              <option value="4-6" selected>Inhalar 4 s · exhalar 6 s</option>
+              <option value="5-5">Inhalar 5 s · exhalar 5 s</option>
+              <option value="4-2-6">Inhalar 4 · sostener 2 · exhalar 6</option>
+              <option value="caja">Caja 4 · 4 · 4 · 4 (incluye sostener)</option>
+            </select>
+          </div>
+          <div>
+            <label for="cfgNeckRange">Respira: giro de cabeza (pajaritos)</label>
+            <select id="cfgNeckRange">
+              <option value="suave" selected>Suave (hasta 20° a cada lado)</option>
+              <option value="medio">Medio (hasta 35°)</option>
+              <option value="amplio">Amplio (hasta 50°)</option>
+            </select>
+          </div>
+        </div>
+        <p class="pc-muted" style="margin:-4px 0 12px; font-size:0.8rem;">Ritmos y rangos son opciones de diseño, no recomendaciones clínicas: el equipo define cuáles usar con cada paciente. En Respira no se mide el alcance y la sesión termina por tiempo.</p>
         <div style="margin-bottom:12px;">
           <label for="cfgFairDist">Distancia de los tarros (solo Feria de Juegos)</label>
           <select id="cfgFairDist">
@@ -700,7 +729,7 @@
   </main>
 </div>
 
-<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.9.4 · prototipo no validado clínicamente</p>
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.10.0 · prototipo no validado clínicamente</p>
 <script type="module" src="./terapeuta.js"></script>
 <script>
 if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); }); }

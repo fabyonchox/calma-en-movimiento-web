@@ -2,6 +2,7 @@ import * as THREE from './libs/three.module.min.js';
 import { FairScene } from './feria_escena.js';
 import { Guide, GuideVoice } from './guia.js';
 import { Sfx } from './sfx.js';
+import { BreathScene } from './respira.js';
 import {
   DEFAULTS, ZONES, SIZES, MESSAGES, normalizeConfig, mergeConfig, REMOTE_KEYS, effectiveDistances, pickTarget,
   horizontalDistance, distance, formatTime, newRecord, buildCSV, buildSummary, sustainedReach,
@@ -24,6 +25,8 @@ let critters = null; // animalitos de la pantalla de espera
 let fairScene = null; // escenario Feria de juegos
 let guide = null; // guía: luz con carita que acompaña al paciente
 let sfx = null; // sonidos de interacción
+let breathScene = null; // Respira: estrella que respira y pajaritos (relajación)
+let hemiLight = null; let sunLight = null; // luces (Respira las atenúa a un atardecer)
 let treeGroup, basketGroup, targetAppleGroup, harvestedApplesGroup, basketRimGlow;
 const baskets = []; // canasto izquierdo y derecho
 
@@ -851,10 +854,12 @@ function initThree() {
   camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.05, 120);
 
   // Iluminación natural suave
-  scene.add(new THREE.HemisphereLight(0xfffaee, 0x7fa274, 1.15));
+  hemiLight = new THREE.HemisphereLight(0xfffaee, 0x7fa274, 1.15);
+  scene.add(hemiLight);
   const sun = new THREE.DirectionalLight(0xfff5dd, 0.9);
   sun.position.set(5, 10, 3);
   scene.add(sun);
+  sunLight = sun;
 
   buildSky();
 
@@ -885,6 +890,19 @@ function initThree() {
     voice: new GuideVoice('audio/guia/'),
     enabled: () => !!(S.cfg && S.cfg.guide !== 'off'),
     progressEnabled: () => !!(S.cfg && S.cfg.guideProgress === 'on'),
+  });
+  breathScene = new BreathScene(THREE, anchor, {
+    audioCtx: () => audioCtx,
+    musicOn: () => !!(S.cfg && S.cfg.feedback !== 'visual'),
+    sfx,
+    onCycle: (n) => { S.spawned = n; if (guide && n % 4 === 0) guide.say('resp_bien_' + (1 + (n / 4 - 1) % 3), 'coach'); },
+    onWord: (name) => {
+      // Las primeras respiraciones, el guía las acompaña con la voz
+      const w = { inhale: 'resp_inhala', exhale: 'resp_exhala', hold: 'resp_sosten' }[name];
+      if (guide && w && breathScene.cycles < 3) guide.say(w, 'coach');
+    },
+    onStage: (st) => { if (st === 'birds' && guide) { guide.clear(); guide.say('pajaros_intro'); } },
+    onBird: (n) => { S.hits = n; if (guide) guide.say('pajaro_' + (1 + (n - 1) % 3), 'coach'); broadcastMetrics(); },
   });
   critters = new Critters(THREE, anchor, {
     // Manos activas del paciente (punta del índice o mando) y si están pellizcando/agarrando
@@ -1653,7 +1671,9 @@ function phaseModel() {
         ? 'Toma la manzana (pellizco o gatillo) y déjala en el canasto izquierdo o derecho.'
         : cfg.gameMode === 'fair'
           ? 'Toma una pelota de la bandeja (pellizco o gatillo) y lánzala para botar los tarros. Suéltala para lanzar.'
-          : 'Toca las luces mágicas con tus dedos o con el mando, a tu propio ritmo.';
+          : cfg.gameMode === 'breath'
+            ? 'Sigue a la estrella con tu respiración. Después, mira hacia las luces para llamar a los pajaritos.'
+            : 'Toca las luces mágicas con tus dedos o con el mando, a tu propio ritmo.';
       if (cfg.gameMode === 'fair' && S.fairOk === false) {
         return {
           panel: 'menu',
@@ -1686,7 +1706,7 @@ function phaseModel() {
           title: '',
           titleSize: 22,
           lineSize: 26,
-          lines: [S.msgIdx === 0 && cfg.gameMode === 'fair' ? 'Toma una pelota y lánzala hacia los tarros.' : S.msgIdx === 0 && cfg.gameMode === 'apples' ? 'Toma la manzana y déjala en el canasto.' : MESSAGES[S.msgIdx]],
+          lines: [cfg.gameMode === 'breath' ? (breathScene && breathScene.stage === 'birds' ? 'Mira hacia la luz para llamar a los pajaritos.' : 'Sigue a la estrella con tu respiración.') : S.msgIdx === 0 && cfg.gameMode === 'fair' ? 'Toma una pelota y lánzala hacia los tarros.' : S.msgIdx === 0 && cfg.gameMode === 'apples' ? 'Toma la manzana y déjala en el canasto.' : MESSAGES[S.msgIdx]],
           buttons: [{ id: 'pause', label: 'Pausa', secondary: true }],
           cols: 1,
         },
@@ -1956,8 +1976,9 @@ function onButton(id, c, isRemote = false) {
 
 /* ================= Feria de juegos ================= */
 
-const MODE_ORDER = ['apples', 'lights', 'fair'];
-const MODE_NAME = { apples: '🍎 Manzano', lights: '🌸 Luces', fair: '🎪 Feria' };
+const MODE_ORDER = ['apples', 'lights', 'fair', 'breath'];
+const MODE_NAME = { apples: '🍎 Manzano', lights: '🌸 Luces', fair: '🎪 Feria', breath: '🌙 Respira' };
+const isBreath = () => !!(S.cfg && S.cfg.gameMode === 'breath');
 const isFair = () => !!(S.cfg && S.cfg.gameMode === 'fair');
 
 function fairHost() {
@@ -2132,6 +2153,10 @@ function startPlay() {
     if (!layoutFair()) { S.phase = 'ready'; return; }
     fairScene.start();
   }
+  if (isBreath() && breathScene) {
+    breathScene.configure(S.cfg, S.eyeH);
+    breathScene.start(performance.now());
+  }
   S.phase = 'play';
   S.nextSpawnAt = performance.now() + 1000;
 }
@@ -2142,6 +2167,7 @@ function handKey() { return S.cfg && (S.cfg.side === 'left' || S.cfg.side === 'b
 
 function guideInstruction() {
   if (!guide || !S.cfg) return;
+  if (isBreath()) { guide.say('inst_breath'); return; }
   guide.say('inst_' + (S.cfg.gameMode || 'apples') + '_' + handKey());
 }
 
@@ -2161,12 +2187,12 @@ function guideOnPhase(prev, phase) {
     guideInstruction();
   } else if (phase === 'play') {
     if (prev === 'pause') guide.sayNow('seguimos');
-    else { guide.say('comenzar'); S.guideMid = false; S.guideLast = false; }
+    else if (!isBreath()) { guide.say('comenzar'); S.guideMid = false; S.guideLast = false; }
   } else if (phase === 'pause') {
     guide.sayNow('pausa');
   } else if (phase === 'satisfaction') {
     guide.clear();
-    guide.say(S.endReason === 'reps' ? 'fin_meta' : S.endReason === 'time' ? 'fin_tiempo' : 'fin_otro');
+    guide.say(isBreath() ? 'resp_fin' : S.endReason === 'reps' ? 'fin_meta' : S.endReason === 'time' ? 'fin_tiempo' : 'fin_otro');
     guide.say('encuesta');
   } else if (phase === 'rest') {
     guide.say('descanso');
@@ -2189,6 +2215,37 @@ function guideMiss() {
   guide.miss(isFair());
 }
 
+/* ================= Respira: mirada y atardecer ================= */
+
+const _gq = { a: null, b: null, v: null };
+// Hacia dónde mira la cabeza, en grados, respecto del frente del jardín (positivo = derecha)
+function headGaze() {
+  if (!camera || !anchor) return null;
+  if (!_gq.a) { _gq.a = new THREE.Quaternion(); _gq.b = new THREE.Quaternion(); _gq.v = new THREE.Vector3(); }
+  camera.updateMatrixWorld(true);
+  camera.getWorldQuaternion(_gq.a);
+  anchor.getWorldQuaternion(_gq.b).invert();
+  const d = _gq.v.set(0, 0, -1).applyQuaternion(_gq.a).applyQuaternion(_gq.b);
+  return { yawDeg: Math.atan2(d.x, -d.z) * 180 / Math.PI, pitchDeg: Math.asin(Math.max(-1, Math.min(1, d.y))) * 180 / Math.PI };
+}
+
+const DAY = { bg: 0xd2ebed, hemi: 1.15, sun: 0.9 };
+const DUSK = { bg: 0xaab6d9, hemi: 0.72, sun: 0.4 };
+let duskK = 0;
+let _c1 = null; let _c2 = null;
+function duskTo(target, dt) {
+  if (!scene) return;
+  const before = duskK;
+  duskK += (target - duskK) * Math.min(1, (dt || 0.016) * 0.6);
+  if (Math.abs(duskK - before) < 1e-4 && (duskK === 0 || duskK === 1)) return;
+  if (Math.abs(target - duskK) < 0.002) duskK = target;
+  if (!_c1) { _c1 = new THREE.Color(DAY.bg); _c2 = new THREE.Color(DUSK.bg); }
+  if (scene.background && scene.background.isColor) scene.background.copy(_c1).lerp(_c2, duskK);
+  if (scene.fog) scene.fog.color.copy(_c1).lerp(_c2, duskK);
+  if (hemiLight) hemiLight.intensity = DAY.hemi + (DUSK.hemi - DAY.hemi) * duskK;
+  if (sunLight) sunLight.intensity = DAY.sun + (DUSK.sun - DAY.sun) * duskK;
+}
+
 function pausePlay() {
   if (S.phase !== 'play') return;
   S.phase = 'pause';
@@ -2207,6 +2264,7 @@ function resumePlay() {
 function endPlay(early, reason) {
   // Feria: se limpia la zona (pelotas del suelo, tarros de vuelta, bandejas llenas).
   if (fairScene) fairScene.clear();
+  if (breathScene) breathScene.stop();
   if (orb) orb.visible = false;
   if (sparkPoints) sparkPoints.visible = false;
   if (targetAppleGroup) targetAppleGroup.visible = false;
@@ -2344,7 +2402,8 @@ function update(dt, now) {
 
   if (S.phase === 'settle' && now >= S.settleUntil) {
     placeAnchor();
-    S.phase = 'calib';
+    // Respira no usa el alcance del brazo: pasa directo a "listo"
+    S.phase = isBreath() ? 'ready' : 'calib';
   }
   if (S.phase === 'bye' && now >= S.byeAt && session) {
     const s = session;
@@ -2450,6 +2509,10 @@ function update(dt, now) {
   if (basketGroup) basketGroup.visible = isApplesMode && !waitingScene;
   // La feria solo se ve mientras se juega (o en pausa). En escalas, resumen y descanso se oculta para que no se mezcle con los diálogos.
   if (fairScene) fairScene.setVisible(isFairMode && fairScene.ready() && ['play', 'pause'].includes(S.phase));
+  // Respira: estrella y pajaritos solo mientras se juega; el jardín se atenúa a un atardecer suave y vuelve después.
+  const breathOn = isBreath() && ['play', 'pause'].includes(S.phase);
+  if (breathScene) breathScene.setVisible(breathOn);
+  duskTo(breathOn ? 1 : 0, dt);
 
   if (S.phase !== 'play') return;
 
@@ -2463,6 +2526,15 @@ function update(dt, now) {
   S.activeMs += dt * 1000;
   if (S.activeMs >= S.cfg.minutes * 60000 && !S.heldApple && !S.droppingApple && !(isFairMode && fairScene.holding())) {
     endPlay(false, 'time');
+    return;
+  }
+
+  // ===================== MODO 4: RESPIRA (relajación) =====================
+  // Termina solo por tiempo (no hay meta de repeticiones). Aciertos = pajaritos que llegaron; intentos = respiraciones.
+  if (isBreath()) {
+    if (orb) orb.visible = false;
+    if (targetAppleGroup) targetAppleGroup.visible = false;
+    if (breathScene) breathScene.step(dt, headGaze());
     return;
   }
 
@@ -2723,5 +2795,5 @@ function loop() {
 
 initForm();
 
-export const APP_VERSION = '0.9.4';
+export const APP_VERSION = '0.10.0';
 export const __test = { S, update, onButton, phaseModel, enterVR, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; } };

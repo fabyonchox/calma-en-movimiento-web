@@ -193,6 +193,21 @@ export class Sfx {
     });
   }
 
+  /* ---------- Respira ---------- */
+
+  // Pajarito que se posa: dos o tres trinos cortos y agudos, suaves
+  birdChirp(x) {
+    this.safe((c) => {
+      const d = this.out(c, x);
+      const n = 2 + Math.floor(Math.random() * 2);
+      for (let i = 0; i < n; i++) {
+        const f = 2600 + Math.random() * 900;
+        this.tone(c, d, { t: i * 0.13, freq: f, freqEnd: f * 1.35, dur: 0.09, vol: 0.035 });
+        this.tone(c, d, { t: i * 0.13 + 0.05, freq: f * 1.3, freqEnd: f, dur: 0.07, vol: 0.025 });
+      }
+    });
+  }
+
   /* ---------- Guía ---------- */
 
   // Pequeño sonido cuando el guía va a hablar (avisa al paciente que mire)

@@ -51,6 +51,20 @@ export const PHRASES = {
   encuesta: 'Ahora tu kinesiólogo te hará unas preguntas.',
   descanso: 'Puedes descansar. Gracias por tu esfuerzo de hoy.',
   adios: '¡Hasta la próxima!',
+
+  // Respira (relajación)
+  inst_breath: 'Este es un momento para relajarte. Sigue a la estrella con tu respiración: cuando crece, toma aire; cuando se achica, suéltalo despacio.',
+  resp_inhala: 'Inhala…',
+  resp_exhala: 'Exhala…',
+  resp_sosten: 'Sostén un momento…',
+  resp_bien_1: 'Muy bien, sigue a tu ritmo.',
+  resp_bien_2: 'Así, con calma.',
+  resp_bien_3: 'Deja que el aire entre y salga suavemente.',
+  pajaros_intro: 'Ahora gira suavemente la cabeza hacia la luz y mírala un momento para llamar a los pajaritos.',
+  pajaro_1: '¡Llegó un pajarito!',
+  pajaro_2: 'Qué bonito, escucha cómo canta.',
+  pajaro_3: 'Muy bien, mira hacia la próxima luz.',
+  resp_fin: 'Terminamos este momento de calma. Gracias por regalarte este tiempo.',
 };
 
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
