@@ -32,7 +32,13 @@ export const DEFAULTS = {
   // Respira (opciones de diseño; el equipo define cuáles usar): ver respira_logica.js
   breathPattern: '4-6',
   neckRange: 'suave',
-  breathContent: 'ambos',
+  breathContent: 'ambos', // ambos | estrella | pajaros | paisaje (Respira 360)
+  // Respira 360 (ver documento "Protocolo Respira 360")
+  breathLandscape: 'playa', // playa | cascada | pradera | bosque
+  breathGuidedMin: 5, // minutos de respiración guiada: 3 | 5 | 8 | 10
+  breathSettle: 'on', // llegada y vuelta a la calma (1 min cada una): 'on' | 'off'
+  breathCount: 'off', // cuenta de segundos visible: 'on' | 'off'
+  breathVoice: 'inicio', // voz del guía: 'inicio' (primeras respiraciones) | 'todas' | 'off'
 };
 
 // Mensajes neutros (Fase 5). Sin lenguaje competitivo ni punitivo.
@@ -64,9 +70,14 @@ export function normalizeConfig(raw = {}) {
   c.guide = c.guide === 'off' || c.guide === false ? 'off' : 'on';
   c.guideProgress = c.guideProgress === 'on' || c.guideProgress === true ? 'on' : 'off';
   c.fairDist = ['near', 'mid', 'far'].includes(c.fairDist) ? c.fairDist : DEFAULTS.fairDist;
-  c.breathPattern = ['4-6', '5-5', '4-2-6', 'caja'].includes(c.breathPattern) ? c.breathPattern : DEFAULTS.breathPattern;
+  c.breathPattern = ['4-6', '5-5', 'inicial', 'suspiro', '4-2-6', 'caja'].includes(c.breathPattern) ? c.breathPattern : DEFAULTS.breathPattern;
   c.neckRange = ['suave', 'medio', 'amplio'].includes(c.neckRange) ? c.neckRange : DEFAULTS.neckRange;
-  c.breathContent = ['ambos', 'estrella', 'pajaros'].includes(c.breathContent) ? c.breathContent : DEFAULTS.breathContent;
+  c.breathContent = ['ambos', 'estrella', 'pajaros', 'paisaje'].includes(c.breathContent) ? c.breathContent : DEFAULTS.breathContent;
+  c.breathLandscape = ['playa', 'cascada', 'pradera', 'bosque'].includes(c.breathLandscape) ? c.breathLandscape : DEFAULTS.breathLandscape;
+  c.breathGuidedMin = [3, 5, 8, 10].includes(Number(c.breathGuidedMin)) ? Number(c.breathGuidedMin) : DEFAULTS.breathGuidedMin;
+  c.breathSettle = c.breathSettle === 'off' || c.breathSettle === false ? 'off' : 'on';
+  c.breathCount = c.breathCount === 'on' || c.breathCount === true ? 'on' : 'off';
+  c.breathVoice = ['inicio', 'todas', 'off'].includes(c.breathVoice) ? c.breathVoice : DEFAULTS.breathVoice;
 
   c.minH = clamp(num(c.minH, DEFAULTS.minH), 0.3, 2.0);
   c.maxH = clamp(num(c.maxH, DEFAULTS.maxH), 0.4, 2.2);
@@ -83,7 +94,7 @@ export function normalizeConfig(raw = {}) {
 }
 
 // Campos que la tablet del evaluador puede cambiar en el visor. Cualquier otro campo se ignora.
-export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'guide', 'guideProgress', 'fairDist', 'breathPattern', 'neckRange', 'breathContent'];
+export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'guide', 'guideProgress', 'fairDist', 'breathPattern', 'neckRange', 'breathContent', 'breathLandscape', 'breathGuidedMin', 'breathSettle', 'breathCount', 'breathVoice'];
 
 // Mezcla la configuración actual del visor con la que manda la tablet y la normaliza.
 export function mergeConfig(current, incoming) {

@@ -65,6 +65,13 @@ export const PHRASES = {
   pajaro_2: 'Qué bonito, escucha cómo canta.',
   pajaro_3: 'Muy bien, ahora sigue al próximo pajarito.',
   resp_fin: 'Terminamos este momento de calma. Gracias por regalarte este tiempo.',
+  // Respira 360 (ver documento "Protocolo Respira 360"): voz suave, nunca "profundo" (evita respirar de más)
+  inst_p360: 'Este es un momento para ti. Siéntate cómodo y deja descansar tus manos. Vamos a respirar suave, a tu ritmo.',
+  p360_llegada: 'Observa este lugar y respira como lo haces normalmente.',
+  p360_guiada: 'Ahora sigue la luz: cuando crece, toma aire suave; cuando se achica, suéltalo despacio. Sin forzar.',
+  p360_vuelta: 'Deja que tu respiración vuelva a su ritmo natural. Quédate un momento aquí.',
+  p360_cierre: 'Mueve suavemente los dedos de las manos y de los pies. Cuando estés listo, terminamos.',
+  resp_un_poco_mas: 'Un poquito más…',
 };
 
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }

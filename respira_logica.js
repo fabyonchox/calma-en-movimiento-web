@@ -9,7 +9,14 @@ export const BREATH_PATTERNS = {
   '5-5': { label: 'Inhalar 5 s · exhalar 5 s', steps: [{ name: 'inhale', secs: 5 }, { name: 'exhale', secs: 5 }] },
   '4-2-6': { label: 'Inhalar 4 s · sostener 2 s · exhalar 6 s', steps: [{ name: 'inhale', secs: 4 }, { name: 'hold', secs: 2 }, { name: 'exhale', secs: 6 }] },
   'caja': { label: 'Caja: inhalar 4 · sostener 4 · exhalar 4 · sostener 4', steps: [{ name: 'inhale', secs: 4 }, { name: 'hold', secs: 4 }, { name: 'exhale', secs: 4 }, { name: 'holdOut', secs: 4 }] },
+  // Patrones agregados en 0.11 (ver "Protocolo Respira 360"): sin retener el aire.
+  'inicial': { label: 'Inicial: inhalar 3 s · exhalar 4 s', steps: [{ name: 'inhale', secs: 3 }, { name: 'exhale', secs: 4 }] },
+  // Suspiro cíclico (Balban et al., 2023). El estudio no fija segundos: estos tiempos son una adaptación técnica.
+  'suspiro': { label: 'Suspiro cíclico: inhalar 2 s · un poquito más 1 s · exhalar 6 s', steps: [{ name: 'inhale', secs: 2, to: 0.8 }, { name: 'inhale2', secs: 1, from: 0.8 }, { name: 'exhale', secs: 6 }] },
 };
+// Patrones que retienen el aire: opción avanzada (pueden no ser adecuados en pacientes cardíacos o respiratorios).
+export const HOLD_PATTERNS = ['4-2-6', 'caja'];
+export function patternHolds(key) { return HOLD_PATTERNS.includes(key); }
 export const DEFAULT_PATTERN = '4-6';
 
 // Giro de cabeza máximo (grados a cada lado) para los pajaritos. Valores de diseño, a confirmar por el equipo.
@@ -26,7 +33,7 @@ export const BREATH_CONTENT = ['ambos', 'estrella', 'pajaros'];
 // Margen técnico de la mirada: la cabeza apunta al pajarito si está a 8° o menos
 export const GAZE_TOLERANCE_DEG = 8;
 
-export const WORDS = { inhale: 'Inhala', hold: 'Sostén', exhale: 'Exhala', holdOut: 'Pausa' };
+export const WORDS = { inhale: 'Inhala', inhale2: 'Un poquito más', hold: 'Sostén', exhale: 'Exhala', holdOut: 'Pausa' };
 
 export function patternOf(key) { return BREATH_PATTERNS[key] || BREATH_PATTERNS[DEFAULT_PATTERN]; }
 export function cycleSecs(key) { return patternOf(key).steps.reduce((a, s) => a + s.secs, 0); }
@@ -42,19 +49,20 @@ export function breathAt(t, key) {
   for (const s of p.steps) {
     if (r < s.secs) {
       const progress = r / s.secs;
-      return { name: s.name, progress, cycle, size: sizeFor(s.name, progress), remaining: s.secs - r };
+      return { name: s.name, progress, cycle, size: sizeFor(s, progress), remaining: s.secs - r };
     }
     r -= s.secs;
   }
   const last = p.steps[p.steps.length - 1];
-  return { name: last.name, progress: 1, cycle, size: sizeFor(last.name, 1), remaining: 0 };
+  return { name: last.name, progress: 1, cycle, size: sizeFor(last, 1), remaining: 0 };
 }
 
 // Suavizado (sube y baja sin tirones)
 const ease = (x) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, x)));
 
-function sizeFor(name, progress) {
-  if (name === 'inhale') return ease(progress);
+function sizeFor(step, progress) {
+  const name = step.name;
+  if (name === 'inhale' || name === 'inhale2') { const a = step.from || 0; const b = step.to ?? 1; return a + (b - a) * ease(progress); }
   if (name === 'hold') return 1;
   if (name === 'exhale') return 1 - ease(progress);
   return 0; // holdOut
@@ -158,4 +166,41 @@ export function starPose(size, t) {
     y: 0.05 + 0.35 * (1 - size) * Math.max(0, Math.sin(t * 0.21 + 1)) + 0.04 * Math.sin(t * 0.9),
     z: -dist,
   };
+}
+
+/* ---------------- Respira 360: sesión en un paisaje 360° (ver documento "Protocolo Respira 360") ---------------- */
+
+export const LANDSCAPES = {
+  playa: { label: 'Playa al amanecer', sound: 'olas' },
+  cascada: { label: 'Río y cascada', sound: 'agua' },
+  pradera: { label: 'Pradera', sound: 'pradera' },
+  bosque: { label: 'Bosque', sound: 'bosque' },
+};
+export const DEFAULT_LANDSCAPE = 'playa';
+export const GUIDED_MINUTES = [3, 5, 8, 10];
+// Tiempos de llegada, vuelta a la calma y cierre (práctica habitual, no dato de estudio; a confirmar por el equipo)
+export const SETTLE_SECS = 60;
+export const BACK_SECS = 60;
+export const CLOSE_SECS = 20;
+
+// Reparto de la sesión: llegada · respiración guiada (ciclos completos) · vuelta a la calma · cierre.
+export function landscapePlan(guidedMin, settleOn, key) {
+  const cyc = cycleSecs(key);
+  const want = Math.max(1, guidedMin || 5) * 60;
+  const guided = Math.max(1, Math.round(want / cyc)) * cyc; // nunca corta una respiración a la mitad
+  const settle = settleOn ? SETTLE_SECS : 0;
+  const back = settleOn ? BACK_SECS : 0;
+  return { settle, guided, back, close: CLOSE_SECS, total: settle + guided + back + CLOSE_SECS, cycles: Math.round(guided / cyc) };
+}
+
+// En qué fase está la sesión a los t segundos: 'llegada' | 'guiada' | 'vuelta' | 'cierre' | 'fin'
+export function landscapePhaseAt(t, p) {
+  if (t < p.settle) return { name: 'llegada', t, left: p.settle - t };
+  let r = t - p.settle;
+  if (r < p.guided) return { name: 'guiada', t: r, left: p.guided - r };
+  r -= p.guided;
+  if (r < p.back) return { name: 'vuelta', t: r, left: p.back - r };
+  r -= p.back;
+  if (r < p.close) return { name: 'cierre', t: r, left: p.close - r };
+  return { name: 'fin', t: r, left: 0 };
 }
