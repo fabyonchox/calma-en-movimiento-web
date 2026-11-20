@@ -2,7 +2,7 @@ import { getSyncServerUrl, getSessionCode } from './sync-config.js';
 import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure } from './logic.js';
 import { PatientsPanel } from './pacientes.js';
 
-const APP_VERSION = '0.10.9';
+const APP_VERSION = '0.10.10';
 
 let ws = null;
 let currentRoom = getSessionCode() || 'HOSPITAL-1';
@@ -60,7 +60,7 @@ const MODE_ES = { apples: 'Cosecha del Manzano', lights: 'Jardín de Luces', fai
 const CFG_FIELDS = {
   gameMode: 'cfgMode', zone: 'cfgZone', side: 'cfgSide', position: 'cfgPos',
   minutes: 'cfgMin', reps: 'cfgReps', dwell: 'cfgDwell', size: 'cfgSize', feedback: 'cfgFeedback',
-  guide: 'cfgGuide', guideProgress: 'cfgGuideProgress', fairDist: 'cfgFairDist', audio3d: 'cfgAudio3d',
+  guide: 'cfgGuide', guideProgress: 'cfgGuideProgress', fairDist: 'cfgFairDist', audio3d: 'cfgAudio3d', handLook: 'cfgHandLook',
   breathPattern: 'cfgBreathPattern', neckRange: 'cfgNeckRange', breathContent: 'cfgBreathContent',
 };
 

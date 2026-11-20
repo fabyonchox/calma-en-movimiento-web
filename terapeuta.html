@@ -664,6 +664,15 @@
           </div>
         </div>
         <div style="margin-bottom:12px;">
+          <label for="cfgHandLook">Aspecto de las manos en el visor</label>
+          <select id="cfgHandLook">
+            <option value="skin1">Natural, piel clara</option>
+            <option value="skin2" selected>Natural, piel media</option>
+            <option value="skin3">Natural, piel oscura</option>
+            <option value="glow">Luminosa (verde translúcida)</option>
+          </select>
+        </div>
+        <div style="margin-bottom:12px;">
           <label for="cfgAudio3d">Sonido espacial 3D</label>
           <select id="cfgAudio3d">
             <option value="on" selected>Activado (cada sonido sale desde donde ocurre)</option>
@@ -742,7 +751,7 @@
   </main>
 </div>
 
-<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.10.9 · prototipo no validado clínicamente</p>
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.10.10 · prototipo no validado clínicamente</p>
 <script type="module" src="./terapeuta.js"></script>
 <script>
 if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); }); }

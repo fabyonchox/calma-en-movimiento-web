@@ -3,6 +3,7 @@ import { FairScene } from './feria_escena.js';
 import { Guide, GuideVoice } from './guia.js';
 import { Sfx } from './sfx.js';
 import { Spatial } from './audio3d.js';
+import { buildHandVisuals, updateHandBones, setHandLook } from './manos.js';
 import { SpaceScene } from './espacio.js';
 import { BreathScene } from './respira.js';
 import { NatureAmbience } from './musica.js';
@@ -625,52 +626,6 @@ function isControllerGrasping(c) {
 
 /* ================= Articulaciones y Modelos Visuales 3D ================= */
 
-const JOINT_NAMES = [
-  'wrist',
-  'thumb-metacarpal', 'thumb-phalanx-proximal', 'thumb-phalanx-distal', 'thumb-tip',
-  'index-finger-metacarpal', 'index-finger-phalanx-proximal', 'index-finger-phalanx-intermediate', 'index-finger-phalanx-distal', 'index-finger-tip',
-  'middle-finger-metacarpal', 'middle-finger-phalanx-proximal', 'middle-finger-phalanx-intermediate', 'middle-finger-phalanx-distal', 'middle-finger-tip',
-  'ring-finger-metacarpal', 'ring-finger-phalanx-proximal', 'ring-finger-phalanx-intermediate', 'ring-finger-phalanx-distal', 'ring-finger-tip',
-  'pinky-finger-metacarpal', 'pinky-finger-phalanx-proximal', 'pinky-finger-phalanx-intermediate', 'pinky-finger-phalanx-distal', 'pinky-finger-tip'
-];
-
-const BONE_PAIRS = [
-  // Pulgar
-  ['wrist', 'thumb-metacarpal'],
-  ['thumb-metacarpal', 'thumb-phalanx-proximal'],
-  ['thumb-phalanx-proximal', 'thumb-phalanx-distal'],
-  ['thumb-phalanx-distal', 'thumb-tip'],
-  // Índice
-  ['wrist', 'index-finger-metacarpal'],
-  ['index-finger-metacarpal', 'index-finger-phalanx-proximal'],
-  ['index-finger-phalanx-proximal', 'index-finger-phalanx-intermediate'],
-  ['index-finger-phalanx-intermediate', 'index-finger-phalanx-distal'],
-  ['index-finger-phalanx-distal', 'index-finger-tip'],
-  // Medio
-  ['wrist', 'middle-finger-metacarpal'],
-  ['middle-finger-metacarpal', 'middle-finger-phalanx-proximal'],
-  ['middle-finger-phalanx-proximal', 'middle-finger-phalanx-intermediate'],
-  ['middle-finger-phalanx-intermediate', 'middle-finger-phalanx-distal'],
-  ['middle-finger-phalanx-distal', 'middle-finger-tip'],
-  // Anular
-  ['wrist', 'ring-finger-metacarpal'],
-  ['ring-finger-metacarpal', 'ring-finger-phalanx-proximal'],
-  ['ring-finger-phalanx-proximal', 'ring-finger-phalanx-intermediate'],
-  ['ring-finger-phalanx-intermediate', 'ring-finger-phalanx-distal'],
-  ['ring-finger-phalanx-distal', 'ring-finger-tip'],
-  // Meñique
-  ['wrist', 'pinky-finger-metacarpal'],
-  ['pinky-finger-metacarpal', 'pinky-finger-phalanx-proximal'],
-  ['pinky-finger-phalanx-proximal', 'pinky-finger-phalanx-intermediate'],
-  ['pinky-finger-phalanx-intermediate', 'pinky-finger-phalanx-distal'],
-  ['pinky-finger-phalanx-distal', 'pinky-finger-tip'],
-  // Palma / Arco metacarpiano
-  ['thumb-metacarpal', 'index-finger-metacarpal'],
-  ['index-finger-metacarpal', 'middle-finger-metacarpal'],
-  ['middle-finger-metacarpal', 'ring-finger-metacarpal'],
-  ['ring-finger-metacarpal', 'pinky-finger-metacarpal']
-];
-
 function buildControllerVisual(g) {
   if (g.userData.built) return;
   g.userData.built = true;
@@ -711,129 +666,6 @@ function buildControllerVisual(g) {
 
   g.add(group);
   g.userData.visual = group;
-}
-
-function buildHandVisuals(hd) {
-  if (hd.userData.built) return;
-  hd.userData.built = true;
-  hd.joints = hd.joints || {};
-
-  const jointMat = new THREE.MeshStandardMaterial({
-    color: 0xdbf5ea, roughness: 0.35, metalness: 0.08, emissive: 0x1d4d3e, emissiveIntensity: 0.45,
-    transparent: true, opacity: 0.92
-  });
-  const tipMat = new THREE.MeshStandardMaterial({
-    color: 0xa8f5df, roughness: 0.25, metalness: 0.1, emissive: 0x56e2b6, emissiveIntensity: 0.85,
-    transparent: true, opacity: 0.95
-  });
-  const auraMat = new THREE.MeshBasicMaterial({
-    color: 0x76eed3, transparent: true, opacity: 0.38, depthWrite: false
-  });
-
-  for (const name of JOINT_NAMES) {
-    let jGroup = hd.joints[name];
-    if (!jGroup) {
-      jGroup = new THREE.Group();
-      jGroup.matrixAutoUpdate = false;
-      jGroup.visible = true;
-      hd.joints[name] = jGroup;
-      hd.add(jGroup);
-    }
-
-    let radius = 0.009;
-    let mat = jointMat;
-    if (name === 'wrist') {
-      radius = 0.015;
-    } else if (name.endsWith('-tip')) {
-      radius = 0.0095;
-      mat = tipMat;
-    } else if (name.includes('metacarpal')) {
-      radius = 0.011;
-    } else if (name.includes('proximal')) {
-      radius = 0.0095;
-    } else if (name.includes('intermediate')) {
-      radius = 0.0085;
-    } else if (name.includes('distal')) {
-      radius = 0.0075;
-    }
-
-    const sphere = new THREE.Mesh(new THREE.SphereGeometry(radius, 14, 10), mat);
-    jGroup.add(sphere);
-
-    // Halo luminoso en la punta del dedo índice para toque intuitivo
-    if (name === 'index-finger-tip') {
-      const aura = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), auraMat);
-      jGroup.add(aura);
-    }
-  }
-
-  // Huesos conectores (falanges)
-  const boneMat = new THREE.MeshStandardMaterial({
-    color: 0xc4ede0, roughness: 0.4, emissive: 0x163d30, emissiveIntensity: 0.35,
-    transparent: true, opacity: 0.85
-  });
-  const bones = [];
-  const bonesGroup = new THREE.Group();
-  hd.add(bonesGroup);
-
-  const baseCylGeo = new THREE.CylinderGeometry(0.0035, 0.0035, 1, 8);
-  baseCylGeo.translate(0, 0.5, 0);
-  baseCylGeo.rotateX(Math.PI / 2);
-
-  for (const pair of BONE_PAIRS) {
-    const mesh = new THREE.Mesh(baseCylGeo, boneMat);
-    mesh.visible = false;
-    bonesGroup.add(mesh);
-    bones.push({ mesh, a: pair[0], b: pair[1] });
-  }
-
-  // Cojín de palma
-  const palmMesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.016, 0.018, 0.008, 16),
-    jointMat
-  );
-  palmMesh.visible = false;
-  hd.add(palmMesh);
-
-  hd.userData.bones = bones;
-  hd.userData.palmMesh = palmMesh;
-}
-
-function updateHandBones(hd) {
-  if (!hd || !hd.visible || !hd.userData.bones) return;
-  const bones = hd.userData.bones;
-  const joints = hd.joints;
-  if (!joints) return;
-
-  for (let i = 0; i < bones.length; i++) {
-    const b = bones[i];
-    const jA = joints[b.a];
-    const jB = joints[b.b];
-    if (jA && jB && jA.visible && jB.visible) {
-      const dist = jA.position.distanceTo(jB.position);
-      if (dist > 0.002 && dist < 0.15) {
-        b.mesh.position.copy(jA.position);
-        b.mesh.lookAt(jB.position);
-        b.mesh.scale.set(1, 1, dist);
-        b.mesh.visible = true;
-      } else {
-        b.mesh.visible = false;
-      }
-    } else {
-      b.mesh.visible = false;
-    }
-  }
-
-  const palm = hd.userData.palmMesh;
-  const wrist = joints['wrist'];
-  const midMeta = joints['middle-finger-metacarpal'];
-  if (palm && wrist && midMeta && wrist.visible && midMeta.visible) {
-    palm.position.lerpVectors(wrist.position, midMeta.position, 0.55);
-    palm.lookAt(midMeta.position);
-    palm.visible = true;
-  } else if (palm) {
-    palm.visible = false;
-  }
 }
 
 function initThree() {
@@ -2546,6 +2378,7 @@ function update(dt, now) {
   // Actualizar animación de huesos para manos articuladas
   for (const c of controllers) {
     if (c.hand && c.hand.visible) {
+      setHandLook(c.hand, S.cfg && S.cfg.handLook);
       updateHandBones(c.hand);
     }
   }
@@ -2908,7 +2741,7 @@ function loop() {
 
 initForm();
 
-export const APP_VERSION = '0.10.9';
+export const APP_VERSION = '0.10.10';
 export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; }, get breathScene() { return breathScene; }, get spaceScene() { return spaceScene; }, get gardenEnv() { return gardenEnv; }, get spaceK() { return spaceK; }, startPlay,
   // Vista previa del viaje por el espacio (k: 0..1) y del atardecer/noche (d: 0..2)
   previewSpace(k, d = 2, secs = 2) { if (!spaceScene) spaceScene = new SpaceScene(THREE, anchor); spaceK = k; spaceScene.setAmount(k); setGardenFade(1 - k); for (let i = 0; i < 60; i++) { duskTo(d, 0.2); spaceScene.step(secs / 60, 0.5); } } };
