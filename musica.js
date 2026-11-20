@@ -54,7 +54,7 @@ function distantChirp(c, dest, t) {
 /* ================= Ambiente del jardín: brisa + pajaritos lejanos ================= */
 
 export class NatureAmbience {
-  constructor(getCtx) { this.getCtx = getCtx; this.on = false; }
+  constructor(getCtx, spatial) { this.getCtx = getCtx; this.spatial = spatial || null; this.on = false; }
 
   start() {
     try { this._start(); } catch (e) { this.on = false; /* el audio nunca debe detener el juego */ }
@@ -82,7 +82,15 @@ export class NatureAmbience {
     // Pajaritos lejanos cada tanto
     const tick = () => {
       if (!this.on) return;
-      distantChirp(this.c, this.master, now(this.c) + 0.05);
+      // Con audio 3D, cada pajarito canta desde un lugar distinto del jardín (alrededor, entre las copas); si no, suena de frente.
+      let dest = this.master;
+      if (this.spatial && this.spatial.on()) {
+        const az = Math.random() * Math.PI * 2; const r = 5 + Math.random() * 5;
+        const pn = this.spatial.panner(this.c, { x: Math.sin(az) * r, y: 2.5 + Math.random() * 3, z: -Math.cos(az) * r }, { ref: 2, rolloff: 0.5 });
+        pn.connect(this.master);
+        dest = pn;
+      }
+      distantChirp(this.c, dest, now(this.c) + 0.05);
       this.timer = setTimeout(tick, 6000 + Math.random() * 9000);
     };
     this.timer = setTimeout(tick, 2500);

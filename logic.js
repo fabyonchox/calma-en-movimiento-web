@@ -25,6 +25,7 @@ export const DEFAULTS = {
   dwell: 10,
   feedback: 'both', // visual | sound | both
   ambient: true,
+  audio3d: 'on', // sonido espacial 3D (el sonido sale desde donde ocurre): 'on' | 'off'
   limitReach: true,
   guide: 'on', // guía (luz con carita): 'on' | 'off'
   guideProgress: 'off', // ventanita '3 de 10' junto al guía en el visor: 'on' | 'off'
@@ -60,6 +61,7 @@ export function normalizeConfig(raw = {}) {
   if (!(c.size in SIZES)) c.size = DEFAULTS.size;
   if (!['visual', 'sound', 'both'].includes(c.feedback)) c.feedback = DEFAULTS.feedback;
   c.ambient = !!c.ambient;
+  c.audio3d = c.audio3d === 'off' || c.audio3d === false ? 'off' : 'on';
   c.limitReach = !!c.limitReach;
   c.guide = c.guide === 'off' || c.guide === false ? 'off' : 'on';
   c.guideProgress = c.guideProgress === 'on' || c.guideProgress === true ? 'on' : 'off';
@@ -83,7 +85,7 @@ export function normalizeConfig(raw = {}) {
 }
 
 // Campos que la tablet del evaluador puede cambiar en el visor. Cualquier otro campo se ignora.
-export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'guide', 'guideProgress', 'fairDist', 'breathPattern', 'neckRange', 'breathContent'];
+export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'audio3d', 'guide', 'guideProgress', 'fairDist', 'breathPattern', 'neckRange', 'breathContent'];
 
 // Mezcla la configuración actual del visor con la que manda la tablet y la normaliza.
 export function mergeConfig(current, incoming) {

@@ -2,6 +2,7 @@ import * as THREE from './libs/three.module.min.js';
 import { FairScene } from './feria_escena.js';
 import { Guide, GuideVoice } from './guia.js';
 import { Sfx } from './sfx.js';
+import { Spatial } from './audio3d.js';
 import { SpaceScene } from './espacio.js';
 import { BreathScene } from './respira.js';
 import { NatureAmbience } from './musica.js';
@@ -28,6 +29,7 @@ let critters = null; // animalitos de la pantalla de espera
 let fairScene = null; // escenario Feria de juegos
 let guide = null; // guía: luz con carita que acompaña al paciente
 let sfx = null; // sonidos de interacción
+let spatial = null; // audio 3D (posición de cada sonido + cabeza del paciente)
 let breathScene = null; // Respira: estrella que respira y pajaritos (relajación)
 let hemiLight = null; let sunLight = null; // luces (Respira las atenúa a un atardecer)
 let treeGroup, basketGroup, targetAppleGroup, harvestedApplesGroup, basketRimGlow;
@@ -895,6 +897,8 @@ function initThree() {
   fairScene = new FairScene(THREE, anchor, fairHost());
   // Sonidos de interacción: se apagan si la retroalimentación es "solo visual"
   sfx = new Sfx(() => audioCtx, () => !!(S.cfg && S.cfg.feedback !== 'visual'));
+  spatial = new Spatial(() => audioCtx, () => anchor, THREE.Vector3);
+  sfx.spatial = spatial;
   guide = new Guide(THREE, anchor, {
     sfx,
     voice: new GuideVoice('audio/guia/'),
@@ -2091,11 +2095,11 @@ function fairHost() {
     haptic: (ms, k) => triggerHaptic(ms, k),
     sound: (kind, info = {}) => {
       if (!sfx) return;
-      if (kind === 'grab') sfx.ballGrab(info.x);
-      else if (kind === 'throw') sfx.throwWhoosh(info.x, info.speed);
-      else if (kind === 'clank') sfx.canHit(info.x, info.strength);
-      else if (kind === 'land') sfx.canLand(info.x, info.onFloor);
-      else if (kind === 'bounce') sfx.ballBounce(info.x, info.speed);
+      if (kind === 'grab') sfx.ballGrab(info);
+      else if (kind === 'throw') sfx.throwWhoosh(info, info.speed);
+      else if (kind === 'clank') sfx.canHit(info, info.strength);
+      else if (kind === 'land') sfx.canLand(info, info.onFloor);
+      else if (kind === 'bounce') sfx.ballBounce(info, info.speed);
       else if (kind === 'rearm' || kind === 'refill') sfx.rearm(0);
     },
     // Cada pelota lanzada es un intento.
@@ -2433,7 +2437,7 @@ function spawnTarget() {
   orb.position.set(t.pos.x, t.pos.y, t.pos.z);
   orb.scale.setScalar(0.001);
   orb.visible = true;
-  if (sfx) sfx.lightAppear(t.pos.x);
+  if (sfx) sfx.lightAppear(t.pos);
 }
 
 function chime() {
@@ -2465,7 +2469,7 @@ function chime() {
 let nature = null;
 function startAmbient() {
   if (!audioCtx || !S.cfg.ambient) return;
-  if (!nature) nature = new NatureAmbience(() => audioCtx);
+  if (!nature) nature = new NatureAmbience(() => audioCtx, spatial);
   nature.start();
 }
 
@@ -2696,7 +2700,7 @@ function update(dt, now) {
             grabT: now
           };
           snapStem();
-          if (sfx) sfx.appleSnap(targetAppleGroup.position.x);
+          if (sfx) sfx.appleSnap(targetAppleGroup);
           targetAppleGroup.userData.twig.visible = false;
           triggerHaptic(35, 0.35);
           triggerSparks(targetAppleGroup.position);
@@ -2764,7 +2768,7 @@ function update(dt, now) {
 
       if (da.mesh.position.y <= da.targetY) {
         da.mesh.position.y = da.targetY;
-        if (sfx) sfx.appleBasket(da.mesh.position.x, (da.basket || baskets[0]).count); else thudBasket();
+        if (sfx) sfx.appleBasket(da.mesh, (da.basket || baskets[0]).count); else thudBasket();
         chime();
         triggerHaptic(50, 0.45);
         triggerSparks(da.mesh.position);
@@ -2832,7 +2836,7 @@ function update(dt, now) {
       S.targetPoints.push({ x: S.target.pos.x, y: S.target.pos.y, z: S.target.pos.z, hit: false });
       S.popT = 0;
       S.popDur = 0.4;
-      if (sfx) sfx.lightFade(S.target.pos.x);
+      if (sfx) sfx.lightFade(S.target.pos);
       guideMiss();
     }
   } else {
@@ -2886,7 +2890,7 @@ function harvest() {
   }
   triggerSparks(orb.position);
   triggerHaptic(50, 0.45);
-  if (sfx && S.cfg.feedback !== 'visual') sfx.sparkle(orb.position.x); else chime();
+  if (sfx && S.cfg.feedback !== 'visual') sfx.sparkle(orb); else chime();
   guideHit();
 }
 
@@ -2895,12 +2899,16 @@ function loop() {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   if (renderer.xr.isPresenting) update(dt, now);
+  if (spatial) {
+    spatial.enabled = !S.cfg || S.cfg.audio3d !== 'off';
+    if (renderer.xr.isPresenting) spatial.update(renderer.xr.getCamera());
+  }
   renderer.render(scene, camera);
 }
 
 initForm();
 
-export const APP_VERSION = '0.10.8';
+export const APP_VERSION = '0.10.9';
 export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; }, get breathScene() { return breathScene; }, get spaceScene() { return spaceScene; }, get gardenEnv() { return gardenEnv; }, get spaceK() { return spaceK; }, startPlay,
   // Vista previa del viaje por el espacio (k: 0..1) y del atardecer/noche (d: 0..2)
   previewSpace(k, d = 2, secs = 2) { if (!spaceScene) spaceScene = new SpaceScene(THREE, anchor); spaceK = k; spaceScene.setAmount(k); setGardenFade(1 - k); for (let i = 0; i < 60; i++) { duskTo(d, 0.2); spaceScene.step(secs / 60, 0.5); } } };

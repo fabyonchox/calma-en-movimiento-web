@@ -171,7 +171,7 @@ export class FairScene {
           if (ball && w.grab(ball, c, p, T)) {
             this.holds.set(c, ball);
             this.host.haptic(30, 0.3);
-            this.host.sound('grab', { x: p.x });
+            this.host.sound('grab', { x: p.x, y: p.y, z: p.z });
           }
         }
       } else if (grasp) {
@@ -205,7 +205,7 @@ export class FairScene {
     const info = this.world.release(ball, T);
     if (info.thrown) {
       ball.point = this.host.onThrow(info);
-      this.host.sound('throw', { x: info.pos.x, speed: info.speed });
+      this.host.sound('throw', { x: info.pos.x, y: info.pos.y, z: info.pos.z, speed: info.speed });
     }
     this.host.haptic(20, 0.2);
   }

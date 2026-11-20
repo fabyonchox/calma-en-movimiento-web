@@ -663,6 +663,13 @@
             </select>
           </div>
         </div>
+        <div style="margin-bottom:12px;">
+          <label for="cfgAudio3d">Sonido espacial 3D</label>
+          <select id="cfgAudio3d">
+            <option value="on" selected>Activado (cada sonido sale desde donde ocurre)</option>
+            <option value="off">Desactivado (sonido simple izquierda/derecha)</option>
+          </select>
+        </div>
 
         <button id="applyCfgBtn" class="action-btn" type="button" style="margin-top:16px;">
           📤 Enviar Configuración al Visor
@@ -735,7 +742,7 @@
   </main>
 </div>
 
-<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.10.8 · prototipo no validado clínicamente</p>
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.10.9 · prototipo no validado clínicamente</p>
 <script type="module" src="./terapeuta.js"></script>
 <script>
 if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); }); }
