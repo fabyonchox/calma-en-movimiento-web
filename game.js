@@ -12,6 +12,7 @@ import {
   DEFAULTS, ZONES, SIZES, MESSAGES, normalizeConfig, mergeConfig, REMOTE_KEYS, effectiveDistances, pickTarget,
   horizontalDistance, distance, formatTime, newRecord, buildCSV, buildSummary, sustainedReach,
   MEASURE_LABELS, MEASURE_KEY, sustainedPeak, validateMeasure, buildMeasure, describeMeasure,
+  APPLE_SPEEDS, APPLE_GROUND_Y, moveWaypoint, stepToward, fallStep, warnShake,
 } from './logic.js';
 import { VRPanel } from './vrui.js';
 import { Critters } from './critters.js';
@@ -89,6 +90,8 @@ function broadcastMetrics() {
     uid: S.rec ? S.rec.uid : '',
     comfortReach: S.reach || null,
     measures: S.measures || {},
+    reactAvgMs: S.reactTimes && S.reactTimes.length ? S.reactTimes.reduce((a, b) => a + b, 0) / S.reactTimes.length : 0,
+    reactN: S.reactTimes ? S.reactTimes.length : 0,
     version: APP_VERSION,
   });
 }
@@ -1257,7 +1260,7 @@ function resetCounters() {
     rec: newRecord(S.cfg), committed: false, activeMs: 0, spawned: 0, resolved: 0, hits: 0, pauses: 0,
     reachSum: 0, maxReach: 0, target: null, prevPos: null, age: 0, popT: -1, nextSpawnAt: 0, msgIdx: 0, endedEarly: false, endReason: '',
     targetPoints: [], sparkT: -1,
-    heldApple: null, droppingApple: null, harvestedCount: 0, repsDoneAt: 0,
+    heldApple: null, droppingApple: null, harvestedCount: 0, repsDoneAt: 0, reactTimes: [],
   });
   if (orb) orb.visible = false;
   if (targetAppleGroup) targetAppleGroup.visible = false;
@@ -2255,7 +2258,13 @@ function spawnTarget() {
     targetAppleGroup.scale.setScalar(1);
     targetAppleGroup.visible = true;
     targetAppleGroup.userData.aura.material.opacity = 0.3;
+    const lvl = S.cfg.appleLevel || 1;
+    t.pos = { x: t.pos.x, y: t.pos.y, z: t.pos.z }; // copia propia: en los niveles 2 y 3 esta posición cambia
+    t.start = { ...t.pos };
+    t.goal = null;
+    t.fall = lvl === 3 ? { state: 'hang', t: 0, vy: 0 } : null;
     updateAppleTwig(t.pos.y);
+    if (lvl === 2) targetAppleGroup.userData.twig.visible = false; // flota: ya no cuelga de la rama
     return;
   }
 
@@ -2512,24 +2521,72 @@ function update(dt, now) {
 
     // 1. Manzana colgada esperando agarre
     if (!S.heldApple && !S.droppingApple && S.popT < 0) {
-      targetAppleGroup.position.y = S.target.pos.y + Math.sin(now * 0.003) * 0.005;
+      // Niveles: 1 = fija | 2 = se mueve despacio (derecha, izquierda, adelante, atrás) | 3 = vibra (aviso) y luego cae despacio
+      const lvl = S.cfg.appleLevel || 1;
+      const spd = APPLE_SPEEDS[S.cfg.appleSpeed] || APPLE_SPEEDS.slow;
+      const T = S.target;
+      let canGrab = true;
+      let grabR = 0.095;
+      if (lvl === 2) {
+        if (!T.goal) T.goal = moveWaypoint(S.cfg, S.dist, T.start);
+        const st = stepToward(T.pos, T.goal, spd.move, dt);
+        T.pos.x = st.pos.x; T.pos.y = st.pos.y; T.pos.z = st.pos.z;
+        if (st.arrived) T.goal = moveWaypoint(S.cfg, S.dist, T.start);
+        targetAppleGroup.position.set(T.pos.x, T.pos.y + Math.sin(now * 0.003) * 0.005, T.pos.z);
+        grabR = 0.105;
+      } else if (lvl === 3 && T.fall) {
+        const F = T.fall;
+        F.t += dt;
+        if (F.state === 'hang') {
+          canGrab = false;
+          targetAppleGroup.position.set(T.start.x, T.start.y + Math.sin(now * 0.003) * 0.005, T.start.z);
+          if (F.t >= 0.9) { F.state = 'warn'; F.t = 0; F.rustled = false; if (sfx) sfx.appleRustle(targetAppleGroup); }
+        } else if (F.state === 'warn') { // la manzana vibra un poco: es la señal de que va a caer
+          canGrab = false;
+          const k = Math.min(1, F.t / spd.warn);
+          const sh = warnShake(F.t, k);
+          targetAppleGroup.position.set(T.start.x + sh.x, T.start.y + sh.y, T.start.z + sh.z);
+          targetAppleGroup.userData.aura.material.opacity = 0.35 + 0.25 * k;
+          if (!F.rustled && k > 0.55) { F.rustled = true; if (sfx) sfx.appleRustle(targetAppleGroup); triggerHaptic(15, 0.15); }
+          if (F.t >= spd.warn) {
+            F.state = 'fall'; F.t = 0; F.vy = 0; F.startMs = now;
+            targetAppleGroup.userData.twig.visible = false; // se soltó de la rama
+          }
+        } else { // cae despacio
+          grabR = 0.115;
+          F.vy = fallStep(F.vy, dt, spd);
+          T.pos.x = T.start.x; T.pos.z = T.start.z; T.pos.y += F.vy * dt;
+          targetAppleGroup.position.set(T.pos.x, T.pos.y, T.pos.z);
+          if (T.pos.y <= APPLE_GROUND_Y) { // llegó al suelo sin que la alcanzaran: se cuenta como no lograda, sin castigo
+            T.hit = false;
+            S.targetPoints.push({ x: T.start.x, y: T.start.y, z: T.start.z, hit: false });
+            S.popT = 0;
+            S.popDur = 0.4;
+            if (sfx) sfx.ballBounce(targetAppleGroup, 0.4);
+            guideMiss();
+          }
+        }
+      } else {
+        targetAppleGroup.position.y = S.target.pos.y + Math.sin(now * 0.003) * 0.005;
+      }
 
       let nearAnyHand = false;
       for (const ctrl of activeCtrls) {
         const handP = handLocal(ctrl);
         const d = distance(handP, targetAppleGroup.position);
 
-        if (d < 0.15) {
+        if (d < 0.15 && canGrab) {
           nearAnyHand = true;
           targetAppleGroup.userData.aura.material.opacity = 0.55;
         }
 
         // Condición de Agarre (Reach + Grasp)
-        if (d < 0.095 && isControllerGrasping(ctrl)) {
+        if (canGrab && d < grabR && isControllerGrasping(ctrl)) {
+          if (lvl === 3 && T.fall) S.reactTimes.push(Math.max(0, now - T.fall.startMs)); // tiempo de reacción desde que empezó a caer
           S.heldApple = {
             mesh: targetAppleGroup,
             ctrl: ctrl,
-            originalPos: { ...S.target.pos },
+            originalPos: { ...(lvl === 3 ? T.start : S.target.pos) },
             grabT: now
           };
           snapStem();
@@ -2540,12 +2597,12 @@ function update(dt, now) {
           break;
         }
       }
-      if (!nearAnyHand) {
+      if (!nearAnyHand && !(lvl === 3 && T.fall && T.fall.state === 'warn')) {
         targetAppleGroup.userData.aura.material.opacity = 0.25;
       }
 
       // Tiempo límite de permanencia suave
-      if (S.age >= S.cfg.dwell) {
+      if (lvl !== 3 && S.age >= S.cfg.dwell) {
         S.target.hit = false;
         S.targetPoints.push({ x: S.target.pos.x, y: S.target.pos.y, z: S.target.pos.z, hit: false });
         S.popT = 0;
@@ -2583,7 +2640,13 @@ function update(dt, now) {
         } else {
           // Soltó fuera del canasto -> Regresa suavemente a la rama
           targetAppleGroup.position.set(S.heldApple.originalPos.x, S.heldApple.originalPos.y, S.heldApple.originalPos.z);
-          targetAppleGroup.userData.twig.visible = true;
+          const lv = S.cfg.appleLevel || 1;
+          targetAppleGroup.userData.twig.visible = lv !== 2;
+          if (lv === 3 && S.target.fall) { // vuelve a la rama y vuelve a vibrar antes de caer
+            S.target.pos = { ...S.target.start };
+            S.target.fall = { state: 'hang', t: 0, vy: 0 };
+            updateAppleTwig(S.target.start.y);
+          }
           S.heldApple = null;
         }
       }
@@ -2741,7 +2804,7 @@ function loop() {
 
 initForm();
 
-export const APP_VERSION = '0.10.10';
+export const APP_VERSION = '0.11.0';
 export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; }, get breathScene() { return breathScene; }, get spaceScene() { return spaceScene; }, get gardenEnv() { return gardenEnv; }, get spaceK() { return spaceK; }, startPlay,
   // Vista previa del viaje por el espacio (k: 0..1) y del atardecer/noche (d: 0..2)
   previewSpace(k, d = 2, secs = 2) { if (!spaceScene) spaceScene = new SpaceScene(THREE, anchor); spaceK = k; spaceScene.setAmount(k); setGardenFade(1 - k); for (let i = 0; i < 60; i++) { duskTo(d, 0.2); spaceScene.step(secs / 60, 0.5); } } };

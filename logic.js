@@ -27,6 +27,8 @@ export const DEFAULTS = {
   ambient: true,
   audio3d: 'on', // sonido espacial 3D (el sonido sale desde donde ocurre): 'on' | 'off'
   limitReach: true,
+  appleLevel: 1, // Cosecha del Manzano: 1 manzana fija | 2 manzana que se mueve | 3 manzana que vibra y cae (lento)
+  appleSpeed: 'slow', // velocidad de los niveles 2 y 3: 'slow' | 'medium'
   handLook: 'skin2', // aspecto de las manos en el visor: 'skin1' clara | 'skin2' media | 'skin3' oscura | 'glow' luminosa
   guide: 'on', // guía (luz con carita): 'on' | 'off'
   guideProgress: 'off', // ventanita '3 de 10' junto al guía en el visor: 'on' | 'off'
@@ -62,6 +64,8 @@ export function normalizeConfig(raw = {}) {
   if (!(c.size in SIZES)) c.size = DEFAULTS.size;
   if (!['visual', 'sound', 'both'].includes(c.feedback)) c.feedback = DEFAULTS.feedback;
   c.ambient = !!c.ambient;
+  c.appleLevel = [1, 2, 3].includes(Number(c.appleLevel)) ? Number(c.appleLevel) : DEFAULTS.appleLevel;
+  c.appleSpeed = ['slow', 'medium'].includes(c.appleSpeed) ? c.appleSpeed : DEFAULTS.appleSpeed;
   c.handLook = ['skin1', 'skin2', 'skin3', 'glow'].includes(c.handLook) ? c.handLook : DEFAULTS.handLook;
   c.audio3d = c.audio3d === 'off' || c.audio3d === false ? 'off' : 'on';
   c.limitReach = !!c.limitReach;
@@ -87,7 +91,7 @@ export function normalizeConfig(raw = {}) {
 }
 
 // Campos que la tablet del evaluador puede cambiar en el visor. Cualquier otro campo se ignora.
-export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'audio3d', 'handLook', 'guide', 'guideProgress', 'fairDist', 'breathPattern', 'neckRange', 'breathContent'];
+export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'audio3d', 'handLook', 'appleLevel', 'appleSpeed', 'guide', 'guideProgress', 'fairDist', 'breathPattern', 'neckRange', 'breathContent'];
 
 // Mezcla la configuración actual del visor con la que manda la tablet y la normaliza.
 export function mergeConfig(current, incoming) {
@@ -277,6 +281,76 @@ export function pickTarget(cfg, dist, prev = null, rng = Math.random) {
     if (!prev || distance(pos, prev) >= 0.12) break;
   }
   return best;
+}
+
+/* ---------- Cosecha del Manzano: niveles 2 y 3 ---------- */
+
+export const APPLE_LEVEL_ES = { 1: 'Nivel 1: manzana fija', 2: 'Nivel 2: manzana que se mueve', 3: 'Nivel 3: manzana que cae' };
+
+// Velocidades pensadas para rehabilitación (nunca rápidas):
+//   move = metros por segundo al moverse (nivel 2) ; fall = velocidad máxima de caída (nivel 3) ;
+//   accel = qué tan suave empieza a caer ; warn = segundos que la manzana vibra antes de caer (la señal de aviso)
+export const APPLE_SPEEDS = {
+  slow: { move: 0.06, fall: 0.45, accel: 1.1, warn: 2.2 },
+  medium: { move: 0.11, fall: 0.7, accel: 1.6, warn: 1.6 },
+};
+export const APPLE_GROUND_Y = 0.06; // altura a la que llega una manzana que no se alcanzó
+export const APPLE_MOVE_AMP = { x: 0.16, y: 0.09, z: 0.14 }; // cuánto se aleja (m) de su punto de partida: lados, alto, adelante/atrás
+
+// Mismos límites que usa pickTarget (alcance cómodo y alturas ergonómicas)
+export function targetBounds(cfg, dist) {
+  const eyeH = typeof cfg.eyeH === 'number' && cfg.eyeH > 0.5 ? cfg.eyeH : 1.15;
+  const cap = Math.max(0.25, (dist && dist.maxD) || 0.75);
+  const floor = cap < 0.42 ? cap * 0.8 : 0.42;
+  const minD = Math.min(Math.max(floor, (dist && dist.minD) || floor), cap);
+  return { minD, maxD: cap, minH: Math.max(0.75, eyeH - 0.22), maxH: Math.min(1.70, eyeH + 0.10) };
+}
+
+// Nivel 2: siguiente punto hacia donde se mueve la manzana. Siempre cerca de donde partió (base), dentro del alcance cómodo,
+// y en el lado elegido por el terapeuta. Se mueve en cualquier dirección: derecha, izquierda, adelante y atrás (y un poco arriba y abajo).
+export function moveWaypoint(cfg, dist, base, rng = Math.random) {
+  const b = targetBounds(cfg, dist);
+  const x = base.x + (rng() * 2 - 1) * APPLE_MOVE_AMP.x;
+  const y = base.y + (rng() * 2 - 1) * APPLE_MOVE_AMP.y;
+  const z = base.z + (rng() * 2 - 1) * APPLE_MOVE_AMP.z;
+  return clampToReach({ x, y, z }, cfg, b);
+}
+
+// Deja un punto dentro del alcance cómodo, del cono frontal y de las alturas permitidas
+export function clampToReach(p, cfg, b) {
+  let { x, y, z } = p;
+  y = Math.min(b.maxH, Math.max(b.minH, y));
+  let r = Math.hypot(x, z) || 0.0001;
+  const rr = Math.min(b.maxD, Math.max(b.minD, r));
+  if (rr !== r) { x *= rr / r; z *= rr / r; r = rr; }
+  const maxLat = Math.min(0.35, r * 0.55);
+  let lo = -maxLat; let hi = maxLat;
+  if (cfg.side === 'right') lo = -0.10 * maxLat;
+  else if (cfg.side === 'left') hi = 0.10 * maxLat;
+  x = Math.min(hi, Math.max(lo, x));
+  const zz = Math.sqrt(Math.max(0, r * r - x * x));
+  z = -Math.max(zz, 0.05); // siempre al frente
+  return { x, y, z };
+}
+
+// Avanza un punto hacia una meta a velocidad fija (m/s). Devuelve el punto nuevo y si ya llegó.
+export function stepToward(pos, goal, speed, dt) {
+  const dx = goal.x - pos.x; const dy = goal.y - pos.y; const dz = goal.z - pos.z;
+  const d = Math.hypot(dx, dy, dz);
+  const s = speed * dt;
+  if (d <= s || d < 1e-6) return { pos: { x: goal.x, y: goal.y, z: goal.z }, arrived: true };
+  return { pos: { x: pos.x + dx / d * s, y: pos.y + dy / d * s, z: pos.z + dz / d * s }, arrived: false };
+}
+
+// Nivel 3: caída suave. Acelera poco a poco hasta una velocidad máxima baja.
+export function fallStep(vy, dt, speeds) {
+  return Math.max(-speeds.fall, vy - speeds.accel * dt);
+}
+
+// Nivel 3: pequeño temblor de aviso antes de caer (crece suavemente durante el aviso). k = progreso 0..1
+export function warnShake(t, k) {
+  const amp = 0.003 + 0.006 * k;
+  return { x: Math.sin(t * 58) * amp, z: Math.cos(t * 47) * amp * 0.7, y: Math.sin(t * 31) * amp * 0.3 };
 }
 
 export function formatTime(sec) {

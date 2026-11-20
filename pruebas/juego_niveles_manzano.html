@@ -1,0 +1,41 @@
+<!doctype html><meta charset="utf-8"><body><main></main><pre id="out">running</pre>
+<script type="module">
+const log = []; const NL = String.fromCharCode(10);
+const out = (x) => { document.getElementById('out').textContent = log.join(NL) + NL + (x || ''); };
+window.addEventListener('unhandledrejection', (e) => out('UNHANDLED ' + (e.reason && e.reason.stack || e.reason)));
+window.addEventListener('error', (e) => out('ERROR ' + e.message + ' @ ' + e.filename + ':' + e.lineno));
+const ok = (c, m) => { log.push((c ? 'OK   ' : 'FALLA ') + m); out(); };
+window.WebSocket = class { constructor() { this.readyState = 3; setTimeout(() => this.onclose && this.onclose({}), 0); } send() {} close() {} };
+const mod = await import('../game.js'); const T = mod.__test;
+const { normalizeConfig, targetBounds } = await import('../logic.js');
+T.initThree();
+const ctrls = T.controllers; ctrls.forEach((c) => { c.hand.visible = false; }); const hand = ctrls[0]; const putHand = (x, y, z) => { hand.grip.matrix.makeTranslation(x, y, z); hand.grip.matrixWorld.copy(hand.grip.matrix); }; hand.grip.visible = true; putHand(0.5, 0.2, 0.5); hand.obj.userData.triggerPressed = false;
+const apple = () => T.apple;
+let now = performance.now();
+function setup(level, speed) {
+  T.S.cfg = normalizeConfig({ gameMode: 'apples', appleLevel: level, appleSpeed: speed || 'slow', side: 'both', position: 'sitting', reps: 10, minutes: 5 });
+  T.S.dist = { minD: 0.4, maxD: 0.7 }; T.S.phase = 'play';
+  Object.assign(T.S, { target: null, spawned: 0, hits: 0, resolved: 0, popT: -1, nextSpawnAt: 0, targetPoints: [], heldApple: null, droppingApple: null, reactTimes: [], activeMs: 0, age: 0, prevPos: null, committed: false });
+  putHand(0.5, 0.2, 0.5); hand.obj.userData.triggerPressed = false;
+}
+const frame = () => { now += 16; T.update(0.016, now); };
+
+// ---- Nivel 3 con mano: durante el aviso NO se puede tomar; al caer SI
+setup(3); frame(); frame();
+let heldDuringWarn = false; let caught = false; let reactOk = false;
+for (let i = 0; i < 1500 && T.S.target; i++) {
+  const tg = T.S.target; const st = tg.fall && tg.fall.state;
+  putHand(apple().position.x, apple().position.y, apple().position.z); hand.obj.userData.triggerPressed = true;
+  frame();
+  if (st === 'warn' && T.S.heldApple) heldDuringWarn = true;
+  if (T.S.heldApple) { caught = true; break; }
+}
+ok(!heldDuringWarn, 'nivel 3: mientras vibra no se puede tomar (hay que esperar la caida)');
+ok(caught, 'nivel 3: al caer se puede atrapar con la mano');
+ok(T.S.reactTimes.length === 1 && T.S.reactTimes[0] >= 0 && T.S.reactTimes[0] < 600, 'nivel 3: tiempo de reaccion registrado (' + Math.round(T.S.reactTimes[0]) + ' ms)');
+
+// ---- Nivel 3: soltar fuera del canasto -> vuelve a la rama y vuelve a vibrar
+putHand(0.9, 0.3, 0.9); hand.obj.userData.triggerPressed = false; frame(); frame();
+ok(!T.S.heldApple && T.S.target && T.S.target.fall && T.S.target.fall.state === 'hang' && apple().userData.twig.visible, 'nivel 3: si la suelta fuera del canasto, vuelve a la rama para intentarlo de nuevo');
+out(log.some((l) => l.startsWith('FALLA')) ? 'RESULTADO: HAY FALLAS' : 'RESULTADO: TODO OK');
+</script>

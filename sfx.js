@@ -111,6 +111,14 @@ export class Sfx {
     });
   }
 
+  // Aviso antes de caer (nivel 3): las hojas de la rama se agitan suavemente
+  appleRustle(x) {
+    this.safe((c) => {
+      const d = this.out(c, x);
+      [0, 0.09, 0.2, 0.31].forEach((t, i) => this.burst(c, d, { t, dur: 0.16, type: 'bandpass', freq: 3200 + i * 350, q: 0.9, vol: 0.05 }));
+    });
+  }
+
   /* ---------- Luces ---------- */
 
   // Tocar una luz: destello brillante, una pequeña cascada de campanitas que sube

@@ -1,8 +1,8 @@
 import { getSyncServerUrl, getSessionCode } from './sync-config.js';
-import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure } from './logic.js';
+import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure, APPLE_LEVEL_ES } from './logic.js';
 import { PatientsPanel } from './pacientes.js';
 
-const APP_VERSION = '0.10.10';
+const APP_VERSION = '0.11.0';
 
 let ws = null;
 let currentRoom = getSessionCode() || 'HOSPITAL-1';
@@ -60,7 +60,7 @@ const MODE_ES = { apples: 'Cosecha del Manzano', lights: 'Jardín de Luces', fai
 const CFG_FIELDS = {
   gameMode: 'cfgMode', zone: 'cfgZone', side: 'cfgSide', position: 'cfgPos',
   minutes: 'cfgMin', reps: 'cfgReps', dwell: 'cfgDwell', size: 'cfgSize', feedback: 'cfgFeedback',
-  guide: 'cfgGuide', guideProgress: 'cfgGuideProgress', fairDist: 'cfgFairDist', audio3d: 'cfgAudio3d', handLook: 'cfgHandLook',
+  guide: 'cfgGuide', guideProgress: 'cfgGuideProgress', fairDist: 'cfgFairDist', audio3d: 'cfgAudio3d', handLook: 'cfgHandLook', appleLevel: 'cfgAppleLevel', appleSpeed: 'cfgAppleSpeed',
   breathPattern: 'cfgBreathPattern', neckRange: 'cfgNeckRange', breathContent: 'cfgBreathContent',
 };
 
@@ -106,10 +106,18 @@ function fillForm(cfg, force = false) {
   formFilled = true;
 }
 
+// Nombre de la actividad; en la Cosecha del Manzano incluye el nivel (y la velocidad en los niveles 2 y 3)
+function modeLabel(c) {
+  const base = MODE_ES[c.gameMode] || c.gameMode;
+  if (c.gameMode !== 'apples') return base;
+  const lv = Number(c.appleLevel) || 1;
+  return base + ' · ' + APPLE_LEVEL_ES[lv] + (lv > 1 ? ' (velocidad ' + (c.appleSpeed === 'medium' ? 'media' : 'lenta') + ')' : '');
+}
+
 function describeConfig(c) {
   if (!c) return '';
   return [
-    MODE_ES[c.gameMode] || c.gameMode,
+    modeLabel(c),
     c.zone,
     'lado ' + (SIDE_ES[c.side] || c.side).toLowerCase(),
     (POS_ES[c.position] || c.position).toLowerCase(),
@@ -574,12 +582,13 @@ function updateSummaryText() {
   const summary = [
     '=== INFORME DE SESIÓN REHABILITACIÓN VR (Calma en Movimiento) ===',
     `Sala: ${currentRoom}`,
-    `Actividad: ${MODE_ES[c.gameMode] || c.gameMode}`,
+    `Actividad: ${modeLabel(c)}`,
     `Zona: ${c.zone} | Lado: ${SIDE_ES[c.side] || c.side} | Postura: ${POS_ES[c.position] || c.position}`,
     `Objetivos: ${m.hits} alcanzados de ${m.spawned} presentados (meta: ${reps} repeticiones)`,
     `Tiempo activo: ${formatTime(m.activeSec || 0)} (programado: ${c.minutes} min)`,
     `Alcance máximo: ${(m.maxReach || 0).toFixed(2)} m (promedio: ${(m.avgReach || 0).toFixed(2)} m)`,
     ...measureLines(m),
+    c.gameMode === 'apples' && Number(c.appleLevel) === 3 && m.reactN ? `Tiempo de reacción al caer la manzana: ${(m.reactAvgMs / 1000).toFixed(1)} s en promedio (${m.reactN} manzanas tomadas)` : '',
     `Satisfacción (1-5): ${isNum(m.satisfaction) ? m.satisfaction : 'no registrada'}`,
     `Pausas durante la sesión: ${m.pauses || 0}`,
     m.endReason ? `Cómo terminó: ${END_REASONS[m.endReason] || m.endReason}` : '',
@@ -770,7 +779,7 @@ function buildSessionRecord(manual = false) {
     fecha_ts: new Date().toISOString(),
     zona: c.zone || '',
     lado: SIDE_ES[c.side] || c.side || '',
-    modo: MODE_ES[c.gameMode] || c.gameMode || '',
+    modo: modeLabel(c) || '',
     posicion: POS_ES[c.position] || c.position || '',
     aciertos: m.hits,
     meta: m.reps,
