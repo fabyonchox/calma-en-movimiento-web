@@ -538,71 +538,128 @@
     .cfg-send .action-btn { flex-basis: 100%; min-height: 46px; }
   }
   .cfg-send .action-btn { flex: 1 1 240px; width: auto; margin: 0; }
+
+  /* ===== Rediseño 0.12.6: menos ruido, más jerarquía ===== */
+  body { font-size: 15px; }
+  h1, h2, .gc-name { letter-spacing: -0.01em; }
+  .card { padding: 20px; border-radius: 14px; box-shadow: 0 1px 2px rgba(20,40,35,.05); }
+  .card h2 { font-size: 1.02rem; font-weight: 700; border-bottom: 0; padding-bottom: 0; margin-bottom: 14px; }
+  .section-label { margin: 0; font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .ico { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  /* Barra superior única */
+  .topbar { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; margin-bottom: 4px; display: flex; flex-direction: column; gap: 10px; box-shadow: 0 1px 2px rgba(20,40,35,.05); }
+  .tb-row { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .brand-mark { width: 32px; height: 32px; flex: none; }
+  .brand-txt h1 { margin: 0; font-size: 1.08rem; font-weight: 700; line-height: 1.2; }
+  .brand-sub { font-size: .8rem; color: var(--muted); }
+  .seg { display: inline-flex; background: var(--card-subtle); border: 1px solid var(--line); border-radius: 12px; padding: 3px; gap: 2px; }
+  .seg .rb-pill { min-height: 40px; padding: 6px 14px; border: 0; border-radius: 9px; background: transparent; font-size: .9rem; font-weight: 600; color: var(--muted); }
+  .seg .rb-pill:hover { color: var(--ink); border: 0; }
+  .seg .rb-pill[aria-pressed="true"] { background: var(--card); color: var(--acc); box-shadow: 0 1px 3px rgba(20,40,35,.12); }
+  .tb-status { justify-content: flex-start; gap: 8px 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .rb-state { display: inline-flex; align-items: center; gap: 7px; font-size: .9rem; font-weight: 600; padding: 5px 12px 5px 10px; border-radius: 999px; background: var(--card-subtle); color: var(--muted); border: 1px solid var(--line); }
+  .rb-state .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--warn); flex: none; }
+  .rb-state[data-on="1"] { background: var(--success-light); color: var(--ink); border-color: transparent; }
+  .rb-state[data-on="1"] .dot { background: var(--success); box-shadow: 0 0 0 3px rgba(39,174,96,.18); }
+  .rb-state[data-on="-1"] { background: var(--danger-light); color: var(--danger); border-color: transparent; }
+  .rb-state[data-on="-1"] .dot { background: var(--danger); }
+  .rb-state .rb-code { font-size: .9rem; font-weight: 700; color: inherit; }
+  .rb-sep { opacity: .5; }
+  .rb-casco { font-size: .78rem; font-weight: 600; letter-spacing: .04em; }
+  .rb-ver { font-size: .78rem; font-weight: 600; }
+  .rb-reload { min-height: 34px; padding: 4px 12px; font-size: .82rem; background: var(--card); }
+  .rb-custom { flex: 0 0 auto; margin-left: auto; }
+  .rb-custom summary { font-size: .8rem; font-weight: 600; }
+  .room-pill { background: var(--card-subtle); border: 1px solid var(--line); color: var(--ink); font-weight: 600; }
+  .room-input { width: 120px; }
+  @media (max-width: 600px) { .seg { width: 100%; } .seg .rb-pill { flex: 1; } .rb-custom { margin-left: 0; } }
+
+  /* Pestañas más sobrias */
+  .tabs { padding: 10px 0; gap: 6px; }
+  .tab { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border-radius: 10px; border: 1px solid var(--line); font-size: .92rem; font-weight: 600; }
+  .tab[aria-selected="true"] { background: var(--acc); border-color: var(--acc); color: #fff; box-shadow: none; }
+  .tab[aria-selected="true"] .tab-dot { background: #fff; box-shadow: none; }
+
+  /* Tarjetas de juego: íconos de línea y color solo como acento */
+  .game-card { border-left-width: 4px; }
+  .gc-ico { width: 40px; height: 40px; border-radius: 10px; color: var(--g); }
+  .gc-ico svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .gc-name { font-weight: 700; }
+  .cfg-title { font-weight: 700; }
+
+  /* Ayudas plegables (en vez de párrafos largos) */
+  .hint { margin: 8px 0 0; font-size: .82rem; color: var(--muted); }
+  .hint > summary { cursor: pointer; list-style: none; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--acc); padding: 4px 0; }
+  .hint > summary::-webkit-details-marker { display: none; }
+  .hint > summary::before { content: 'i'; display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid currentColor; font-size: .7rem; font-weight: 700; font-style: italic; }
+  .hint p { margin: 4px 0 0; line-height: 1.45; }
+
+  /* Sesión en vivo */
+  .phase-badge { font-size: .78rem; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--acc-light); color: var(--acc); }
+  .stepper { list-style: none; display: flex; gap: 4px; padding: 0; margin: 0 0 14px; counter-reset: st; }
+  .stepper li { flex: 1; counter-increment: st; font-size: .74rem; font-weight: 600; color: var(--muted); text-align: center; padding-top: 10px; border-top: 3px solid var(--line); }
+  .stepper li[data-state="done"] { border-color: var(--acc); color: var(--ink); }
+  .stepper li[data-state="now"] { border-color: var(--acc); color: var(--acc); font-weight: 700; }
+  .stepper li[data-state="skip"] { opacity: .45; text-decoration: line-through; }
+  .mirror-box { border-style: solid; border-width: 1px; }
+  .mirror-phase-title { font-weight: 700; }
+  button.danger-outline { background: transparent; color: var(--danger); border: 1.5px solid var(--danger); }
+  button.danger-outline:hover:not(:disabled) { background: var(--danger-light); }
+  button.ghost-btn { background: transparent; color: var(--muted); border: 1px dashed var(--line); font-weight: 600; }
+  button.ghost-btn:hover:not(:disabled) { color: var(--ink); background: var(--card-subtle); }
+  button.action-btn { font-weight: 600; border-radius: 10px; }
+  button.secondary-btn { border-width: 1.5px; }
+  .chip-label { font-size: .72rem; font-weight: 600; }
+  .chip-value { font-weight: 700; font-size: 1.45rem; }
+  textarea.summary-area { font-family: inherit; font-size: .88rem; line-height: 1.5; }
+  /* Solo lo que aplica al juego elegido */
+  .cfg-panel[data-mode="breath"] .reach-only, .cfg-panel[data-mode="fair"] .reach-only { display: none; }
+  .cfg-send { margin: 18px -20px -20px; padding: 12px 20px; border-radius: 0 0 14px 14px; }
+  @media (max-width: 520px) { .cfg-send { margin: 14px -20px -20px; } }
 </style>
 </head>
 <body>
 <div class="app-container">
 
-  <!-- Top Navigation & Live Connection Bar -->
-  <header class="top-nav">
-    <div class="nav-title">
-      <span style="font-size:1.6rem;">🩺</span>
-      <div>
-        <h1>Calma en Movimiento</h1>
-        <span class="role-pill">Panel de Supervisión Terapéutica</span>
+  <!-- Barra superior: marca, casco y UN solo estado de conexión -->
+  <header class="topbar" id="roomBanner" aria-live="polite">
+    <div class="tb-row">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="15" fill="var(--acc)"/><path d="M9 18c2.2-5.5 5-8 7-8s4.8 2.5 7 8" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/><circle cx="16" cy="21" r="2.2" fill="#fff"/></svg>
+        <div class="brand-txt"><h1>Calma en Movimiento</h1><span class="brand-sub">Panel del kinesiólogo</span></div>
+      </div>
+      <div class="seg" role="group" aria-label="Elegir casco">
+        <button type="button" class="rb-pill" data-room="HOSPITAL-1">Casco 1</button>
+        <button type="button" class="rb-pill" data-room="HOSPITAL-2">Casco 2</button>
+        <button type="button" class="rb-pill" data-room="HOSPITAL-3">Casco 3</button>
       </div>
     </div>
-
-    <div class="nav-status">
-      <div class="status-badge" id="serverBadge">
-        <span class="status-dot connecting" id="serverDot"></span>
-        <span id="serverStatusText">Conectando...</span>
-      </div>
-
-      <div class="status-badge" id="headsetBadge" style="display:none">
-        <span style="font-size:1.1rem;">🥽</span>
-        <span id="headsetStatusText">Esperando visor...</span>
-      </div>
+    <div class="tb-row tb-status rb-main">
+      <span class="rb-state" id="rbState" data-on="0"><span class="dot"></span><span class="rb-code" id="rbCode">Casco 1</span><span class="rb-sep">·</span><span id="rbStateText">Esperando visor</span></span>
+      <span class="rb-casco" id="rbCasco">HOSPITAL-1</span>
+      <span class="rb-ver" id="rbVer" data-warn="0"></span>
+      <button type="button" class="rb-reload" id="rbReload" hidden>Recargar visor</button>
+      <button type="button" class="rb-reload" id="retryWsBtn" hidden>Reintentar conexión</button>
+      <details class="rb-custom">
+        <summary>Otra sala</summary>
+        <div class="room-pill">
+          <input type="text" id="roomCodeInput" class="room-input" maxlength="20" value="HOSPITAL-1" title="Código de sala" aria-label="Código de sala">
+          <button id="changeRoomBtn" type="button" class="pc-link" title="Cambiar sala">Cambiar</button>
+        </div>
+      </details>
+      <p class="rb-two" id="rbTwo" hidden>Parece que hay <b>dos visores</b> conectados a este casco y se están turnando la conexión. Cierra el juego en los otros equipos o pestañas (Quest, computador, otro visor), o elige otro casco aquí y en el visor.</p>
     </div>
+    <!-- Compatibilidad: elementos que el código aún actualiza, sin mostrarse -->
+    <span hidden><span id="serverDot"></span><span id="serverStatusText"></span><span id="headsetBadge"></span><span id="headsetStatusText"></span></span>
+    <div id="offlineBanner" hidden></div>
   </header>
 
-  <!-- Sala y casco: bien visible para no confundir tablets ni visores -->
-  <section class="room-banner" id="roomBanner" aria-live="polite">
-    <div class="rb-main">
-      <span class="rb-code" id="rbCode">Casco 1</span>
-      <span class="rb-casco" id="rbCasco">HOSPITAL-1</span>
-      <span class="rb-state" id="rbState" data-on="0">Esperando visor… ⏳</span>
-      <span class="rb-ver" id="rbVer" data-warn="0"></span>
-      <button type="button" class="rb-reload" id="rbReload" hidden>🔄 Recargar visor</button>
-      <p class="rb-two" id="rbTwo" hidden>⚠ Parece que hay <b>dos visores</b> conectados a este casco y se están turnando la conexión. Cierra el juego en los otros equipos o pestañas (Quest, computador, otro visor), o elige otro casco aquí y en el visor.</p>
-    </div>
-    <div class="rb-pills" role="group" aria-label="Elegir casco">
-      <button type="button" class="rb-pill" data-room="HOSPITAL-1">🎧 Casco 1</button>
-      <button type="button" class="rb-pill" data-room="HOSPITAL-2">🎧 Casco 2</button>
-      <button type="button" class="rb-pill" data-room="HOSPITAL-3">🎧 Casco 3</button>
-    </div>
-    <details class="rb-custom">
-      <summary>Otra sala</summary>
-      <div class="room-pill">
-        <span>SALA:</span>
-        <input type="text" id="roomCodeInput" class="room-input" maxlength="20" value="HOSPITAL-1" title="Código de sesión compartido">
-        <button id="changeRoomBtn" type="button" style="border:0; background:transparent; cursor:pointer; color:inherit; font-size:1rem;" title="Cambiar Sala">🔄</button>
-      </div>
-    </details>
-  </section>
-
-  <!-- Fallback Offline Banner -->
-  <div id="offlineBanner">
-    <div>
-      <b>⚠️ Sin conexión al servidor de sincronización.</b> La sesión del visor continúa en modo autónomo.
-    </div>
-    <button id="retryWsBtn" class="action-btn secondary-btn" style="width:auto; min-height:36px; padding:6px 14px;">Reintentar conexión</button>
-  </div>
-
   <nav class="tabs" id="mainTabs" role="tablist" aria-label="Secciones del panel">
-    <button type="button" class="tab" role="tab" data-tab="config" aria-selected="true">⚙️ Configurar juego</button>
-    <button type="button" class="tab" role="tab" data-tab="live" aria-selected="false">▶ Sesión en vivo <span class="tab-dot" id="liveDot" hidden title="Visor conectado"></span></button>
-    <button type="button" class="tab" role="tab" data-tab="patient" aria-selected="false">👤 Paciente y reporte</button>
+    <button type="button" class="tab" role="tab" data-tab="config" aria-selected="true"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>Configurar</button>
+    <button type="button" class="tab" role="tab" data-tab="live" aria-selected="false"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M10 9l5 3-5 3z"/></svg>Sesión en vivo <span class="tab-dot" id="liveDot" hidden title="Visor conectado"></span></button>
+    <button type="button" class="tab" role="tab" data-tab="patient" aria-selected="false"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="3.5"/><path d="M5 20c1-4 4-6 7-6s6 2 7 6"/></svg>Paciente y reporte</button>
   </nav>
 
   <main>
@@ -621,7 +678,7 @@
 
           <section class="game-card" data-game="apples">
             <button type="button" class="gc-head" role="radio" aria-checked="true">
-              <span class="gc-ico" aria-hidden="true">🍎</span>
+              <span class="gc-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8c-3-2-7-1-7 4 0 4 3 8 5 8 1 0 1.4-.5 2-.5s1 .5 2 .5c2 0 5-4 5-8 0-5-4-6-7-4z"/><path d="M12 8c0-2 1-4 3-5"/></svg></span>
               <span class="gc-txt"><span class="gc-name">Cosecha del Manzano</span><span class="gc-sub">Alcance, agarre y transporte</span></span>
             </button>
             <div class="gc-body">
@@ -644,9 +701,9 @@
                 <div>
                   <label for="cfgAppleArc">Hacia los lados (nivel 3)</label>
                   <select id="cfgAppleArc">
-                    <option value="frente">Al frente (hasta 35°)</option>
-                    <option value="amplio" selected>Amplio (hasta 60°: girar cabeza y tronco)</option>
-                    <option value="completo">Muy amplio (hasta 85°)</option>
+                    <option value="frente">Al frente · 35°</option>
+                    <option value="amplio" selected>Amplio · 60°</option>
+                    <option value="completo">Muy amplio · 85°</option>
                   </select>
                 </div>
               </div>
@@ -655,7 +712,7 @@
 
           <section class="game-card" data-game="lights">
             <button type="button" class="gc-head" role="radio" aria-checked="false">
-              <span class="gc-ico" aria-hidden="true">🌸</span>
+              <span class="gc-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.2"/><path d="M12 9.8c-1.5-3-1-6 0-6s1.5 3 0 6zM14.2 12c3-1.5 6-1 6 0s-3 1.5-6 0zM12 14.2c1.5 3 1 6 0 6s-1.5-3 0-6zM9.8 12c-3 1.5-6 1-6 0s3-1.5 6 0z"/></svg></span>
               <span class="gc-txt"><span class="gc-name">Jardín de Luces</span><span class="gc-sub">Alcance y toque espacial</span></span>
             </button>
             <div class="gc-body" hidden>
@@ -665,7 +722,7 @@
 
           <section class="game-card" data-game="fair">
             <button type="button" class="gc-head" role="radio" aria-checked="false">
-              <span class="gc-ico" aria-hidden="true">🎪</span>
+              <span class="gc-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 20V10l8-6 8 6v10"/><path d="M4 10h16M9 20v-5h6v5"/></svg></span>
               <span class="gc-txt"><span class="gc-name">Feria de Juegos</span><span class="gc-sub">Tomar y lanzar pelotas a los tarros</span></span>
             </button>
             <div class="gc-body" hidden>
@@ -692,8 +749,8 @@
 
           <section class="game-card" data-game="breath">
             <button type="button" class="gc-head" role="radio" aria-checked="false">
-              <span class="gc-ico" aria-hidden="true">🌙</span>
-              <span class="gc-txt"><span class="gc-name">Respira</span><span class="gc-sub">Relajación: estrella y pajaritos</span></span>
+              <span class="gc-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M19 14.5A7.5 7.5 0 0 1 9.5 5a7.5 7.5 0 1 0 9.5 9.5z"/></svg></span>
+              <span class="gc-txt"><span class="gc-name">Respira</span><span class="gc-sub">Relajación: estrella, pajaritos o Respira 360</span></span>
             </button>
             <div class="gc-body" hidden>
               <div class="gc-fields" data-take="">
@@ -703,27 +760,27 @@
                     <option value="ambos" selected>Estrella y luego pajaritos</option>
                     <option value="estrella">Solo la estrella</option>
                     <option value="pajaros">Solo los pajaritos</option>
-                    <option value="paisaje">Respira 360: paisaje y respiración guiada</option>
+                    <option value="paisaje">Respira 360</option>
                   </select>
                 </div>
                 <div>
                   <label for="cfgBreathPattern">Ritmo de la estrella</label>
                   <select id="cfgBreathPattern">
-                    <option value="4-6" selected>Inhalar 4 s · exhalar 6 s (6/min, por defecto)</option>
-                    <option value="5-5">Inhalar 5 s · exhalar 5 s (6/min)</option>
-                    <option value="inicial">Inicial: inhalar 3 s · exhalar 4 s</option>
-                    <option value="suspiro">Suspiro cíclico: inhalar 2 + 1 s · exhalar 6 s</option>
-                    <option value="4-2-6">Avanzado ⚠ Inhalar 4 · sostener 2 · exhalar 6</option>
-                    <option value="caja">Avanzado ⚠ Caja 4 · 4 · 4 · 4</option>
+                    <option value="4-6" selected>4-6 · por defecto</option>
+                    <option value="5-5">5-5</option>
+                    <option value="inicial">Inicial 3-4</option>
+                    <option value="suspiro">Suspiro cíclico</option>
+                    <option value="4-2-6">4-2-6 · avanzado ⚠</option>
+                    <option value="caja">Caja 4-4-4-4 · avanzado ⚠</option>
                   </select>
-                  <p id="holdWarn" class="pc-muted" style="display:none; margin:6px 0 0; font-size:0.8rem; color:var(--warn);">⚠ Este ritmo retiene el aire. Puede no ser adecuado en pacientes cardíacos o respiratorios: úsalo solo si el equipo médico lo autorizó.</p>
+                  <p id="holdWarn" class="pc-muted" style="display:none; margin:6px 0 0; font-size:0.8rem; color:var(--warn);">Este ritmo retiene el aire. Puede no ser adecuado en pacientes cardíacos o respiratorios: úsalo solo si el equipo médico lo autorizó.</p>
                 </div>
                 <div>
                   <label for="cfgNeckRange">Giro de cabeza (pajaritos)</label>
                   <select id="cfgNeckRange">
-                    <option value="suave" selected>Suave (hasta 20°)</option>
-                    <option value="medio">Medio (hasta 35°)</option>
-                    <option value="amplio">Amplio (hasta 50°)</option>
+                    <option value="suave" selected>Suave · 20°</option>
+                    <option value="medio">Medio · 35°</option>
+                    <option value="amplio">Amplio · 50°</option>
                   </select>
                 </div>
               </div>
@@ -757,14 +814,14 @@
                 <div>
                   <label for="cfgBreathSettle">Llegada y vuelta a la calma</label>
                   <select id="cfgBreathSettle">
-                    <option value="on" selected>Sí (1 min cada una)</option>
+                    <option value="on" selected>Sí · 1 min cada una</option>
                     <option value="off">No</option>
                   </select>
                 </div>
                 <div>
-                  <label for="cfgBreathCount">Cuenta de segundos visible</label>
+                  <label for="cfgBreathCount">Cuenta de segundos</label>
                   <select id="cfgBreathCount">
-                    <option value="off" selected>No (menos distractores)</option>
+                    <option value="off" selected>No</option>
                     <option value="on">Sí</option>
                   </select>
                 </div>
@@ -777,16 +834,16 @@
                   </select>
                 </div>
                 <div>
-                  <label for="cfgBreathVisual">Guía para respirar</label>
+                  <label for="cfgBreathVisual">Guía visual</label>
                   <select id="cfgBreathVisual">
-                    <option value="barra" selected>Barra que se llena y se vacía</option>
-                    <option value="flor">Flor que se abre y se cierra</option>
-                    <option value="luz">Luz suave (mínima)</option>
+                    <option value="barra" selected>Barra</option>
+                    <option value="flor">Flor</option>
+                    <option value="luz">Luz suave</option>
                   </select>
                 </div>
               </div>
-              <p id="p360Note" class="cfg-note">Respira 360: la duración total es la respiración guiada + 2 min de llegada y vuelta + 20 s de cierre (no usa la «Duración máxima» de la sesión). Basado en el documento «Protocolo Respira 360» (prototipo, a revisar por el equipo).</p>
-              <p class="cfg-note">Opciones de diseño, no recomendaciones clínicas. No mide alcance; termina por tiempo.</p>
+              <details class="hint" id="p360Note"><summary>Cómo dura y en qué se basa</summary><p>Respira 360: la duración total es la respiración guiada + 2 min de llegada y vuelta + 20 s de cierre (no usa la «Duración máxima» de la sesión). Basado en el documento «Protocolo Respira 360» (prototipo, a revisar por el equipo).</p></details>
+              <p class="cfg-note">Opciones de diseño, no recomendaciones clínicas. Respira no mide alcance y termina por tiempo.</p>
             </div>
           </section>
         </div>
@@ -857,29 +914,29 @@
                 <option value="12">12 minutos</option>
               </select>
             </div>
-            <div>
-              <label for="cfgReachZone">Zona de trabajo (flexión de hombro)</label>
+            <div class="reach-only">
+              <label for="cfgReachZone">Zona de trabajo</label>
               <select id="cfgReachZone">
-                <option value="mixto" selected>Mixta (como hasta ahora)</option>
+                <option value="mixto" selected>Mixta</option>
                 <option value="bajo">Bajo 90° · alcances bajos</option>
                 <option value="noventa">A 90° · altura del hombro</option>
                 <option value="sobre">Sobre 90° · alcances altos</option>
               </select>
             </div>
-            <div>
+            <div class="reach-only">
               <label for="cfgReachMax">Rango máximo</label>
               <select id="cfgReachMax">
                 <option value="off" selected>No</option>
-                <option value="on">Sí: en el límite de lo medido (sobre 90°)</option>
+                <option value="on">Sí · límite de lo medido</option>
               </select>
             </div>
           </div>
-          <p id="zoneNote" class="pc-muted" style="margin:6px 0 0; font-size:0.8rem;">Zona de trabajo: Cosecha del Manzano (niveles 1 y 2) y Jardín de Luces. Los ángulos son estimados con el alcance calibrado (no reemplazan la goniometría). «Rango máximo» usa la <b>Flexión máxima de hombro</b> medida en la calibración: ubica los objetivos en los últimos 12° de lo logrado, nunca más allá.</p>
+          <details class="hint reach-only" id="zoneNote"><summary>Cómo funcionan la zona y el rango máximo</summary><p>Se aplican a la Cosecha del Manzano (niveles 1 y 2) y al Jardín de Luces. <b>Bajo 90°</b>: 55–78° de flexión estimada · <b>A 90°</b>: 82–98° · <b>Sobre 90°</b>: 105–140°. Los ángulos se estiman con el alcance calibrado y no reemplazan la goniometría. <b>Rango máximo</b> (con «Sobre 90°») usa la <b>Flexión máxima de hombro</b> medida en la calibración y ubica los objetivos en los últimos 12° de lo logrado, nunca más allá.</p></details>
         </div>
 
         <!-- Experiencia en el visor: se usa poco, queda plegado -->
         <details class="cfg-more">
-          <summary>🎧 Experiencia en el visor <span class="cfg-more-sub">retroalimentación, guía, manos y sonido</span></summary>
+          <summary>Experiencia en el visor <span class="cfg-more-sub">retroalimentación, guía, manos y sonido</span></summary>
           <div class="cfg-more-body">
             <div class="form-row">
               <div>
@@ -930,7 +987,7 @@
             <p id="cfgStatus" role="status"></p>
             <p id="cfgActive"></p>
           </div>
-          <button id="applyCfgBtn" class="action-btn" type="button">📤 Enviar Configuración al Visor</button>
+          <button id="applyCfgBtn" class="action-btn" type="button">Enviar configuración al visor</button>
         </div>
       </div>
     </section>
@@ -938,10 +995,13 @@
     <section class="tab-panel main-grid" id="tab-live" role="tabpanel" hidden>
       <div class="card">
         <h2>
-          <span>🪞 Tarjeta Espejo (Vista del Paciente en VR)</span>
-          <span id="currentPhaseBadge" class="role-pill" style="font-size:0.8rem;">Fase: -</span>
+          <span>Lo que ve el paciente</span>
+          <span id="currentPhaseBadge" class="phase-badge">Sin sesión</span>
         </h2>
 
+        <ol class="stepper" id="phaseSteps" aria-label="Etapas de la sesión">
+          <li data-step="calib">Calibración</li><li data-step="pain">Dolor inicial</li><li data-step="play">Juego</li><li data-step="survey">Encuesta</li><li data-step="results">Resumen</li>
+        </ol>
         <div class="mirror-box">
           <div id="mirrorTitle" class="mirror-phase-title">Cargando estado del visor...</div>
           <div id="mirrorLines" class="mirror-desc">Esperando que el paciente inicie la sesión en el visor.</div>
@@ -951,23 +1011,23 @@
         </div>
 
         <div style="border-top: 1px solid var(--line); padding-top: 14px;">
-          <label style="margin-top:0; color:var(--muted);">Control Clínico Directo de Emergencia</label>
+          <p class="section-label">Controles de la sesión</p>
           <p id="sessionNote" style="margin:4px 0 0; font-size:0.9rem; color:var(--muted);"></p>
-          <p style="margin:4px 0 0; font-size:0.8rem; color:var(--muted);">🎯 <b>Recentrar</b>: pide que mire al frente en su postura normal y pulsa una vez. Ajusta posición, dirección y altura de ojos.</p>
+          <p class="cfg-note" style="margin-top:4px;"><b>Recentrar</b>: pide que mire al frente en su postura normal y pulsa una vez. Ajusta posición, dirección y altura de ojos.</p>
           <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:8px;">
-            <button id="directPauseBtn" class="action-btn secondary-btn" type="button">⏸ Pausar</button>
-            <button id="directRecenterBtn" class="action-btn secondary-btn" type="button" title="Centra el juego en la posición, la dirección de la mirada y la altura de ojos actuales del paciente. Pídele que mire al frente en su postura normal." style="border-color:var(--acc); color:var(--acc); font-weight:700;">🎯 Recentrar</button>
-            <button id="directFinishBtn" class="action-btn danger-btn" type="button">⏹ Finalizar</button>
+            <button id="directPauseBtn" class="action-btn secondary-btn" type="button">Pausar</button>
+            <button id="directRecenterBtn" class="action-btn secondary-btn" type="button" title="Centra el juego en la posición, la dirección de la mirada y la altura de ojos actuales del paciente. Pídele que mire al frente en su postura normal." >Recentrar</button>
+            <button id="directFinishBtn" class="action-btn danger-outline" type="button">Finalizar</button>
           </div>
-          <button id="newSessionBtn" class="action-btn secondary-btn" type="button" style="margin-top:10px;">🔄 Nueva sesión (limpiar pantalla)</button>
+          <button id="newSessionBtn" class="action-btn ghost-btn" type="button" style="margin-top:10px;">Nueva sesión (limpiar pantalla)</button>
         </div>
       </div>
       <!-- Telemetría en Vivo -->
       <div class="card">
-        <h2>📊 Métricas Clínicas en Vivo</h2>
+        <h2>Métricas en vivo</h2>
                 <div style="margin: 12px 0 16px 0; background: var(--card-subtle); padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line);">
           <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.9rem; font-weight:700; color:var(--ink); margin-bottom:8px;">
-            <span>📈 Progreso de Aciertos</span>
+            <span>Progreso</span>
             <span id="progressPercent" style="color:var(--acc); font-size:1.05rem;">0% (0 / 10)</span>
           </div>
           <div style="background:var(--line); border-radius:999px; height:12px; overflow:hidden;">
@@ -976,25 +1036,25 @@
         </div>
 <div class="chips-grid">
           <div class="chip">
-            <div class="chip-label">🎯 Aciertos</div>
+            <div class="chip-label">Aciertos</div>
             <div class="chip-value" id="chipHits">0 / 0</div>
           </div>
           <div class="chip">
-            <div class="chip-label">⏱️ Tiempo Activo</div>
+            <div class="chip-label">Tiempo activo</div>
             <div class="chip-value" id="chipTime" style="font-size:1.25rem;">00:00</div>
           </div>
           <div class="chip">
-            <div class="chip-label">📏 Alcance Máximo</div>
+            <div class="chip-label">Alcance máximo</div>
             <div class="chip-value" id="chipMaxReach">0.00 m</div>
           </div>
           <div class="chip">
-            <div class="chip-label">😊 Satisfacción</div>
+            <div class="chip-label">Satisfacción</div>
             <div class="chip-value" id="chipSatisfaction">-</div>
           </div>
         </div>
 
         <div style="background:var(--card-subtle); padding:10px 14px; border-radius:10px; font-size:0.88rem; color:var(--muted); line-height:1.5;">
-          • <b>Satisfacción (1-5):</b> <span id="valSatisfaction" style="font-weight:700; color:var(--ink);">-</span><br>
+          <span hidden id="valSatisfaction"></span>
           • <b>Pausas solicitadas:</b> <span id="valPauses" style="font-weight:700; color:var(--ink);">0</span><br>
           • <b>Objetivos presentados / resueltos:</b> <span id="valAttempts" style="font-weight:700; color:var(--ink);">0 / 0</span><br>
           • <b>Manos detectadas por el visor:</b> <span id="valHands" style="font-weight:700; color:var(--ink);">-</span><br>
@@ -1007,17 +1067,17 @@
       <div class="card" id="patientCard"></div>
       <!-- Reporte y Ficha Clínica -->
       <div class="card">
-        <h2>📝 Reporte para Ficha Clínica</h2>
+        <h2>Reporte para la ficha clínica</h2>
         <div class="notes-box">
-          <label for="therapistNotes">Observaciones del Kinesiólogo</label>
+          <label for="therapistNotes">Observaciones del kinesiólogo</label>
           <textarea id="therapistNotes" rows="2" placeholder="Compensaciones biomecánicas, tolerancia del paciente, comentarios..."></textarea>
 
-          <label for="summaryText">Resumen Clínico Formateado</label>
+          <label for="summaryText">Resumen de la sesión</label>
           <textarea id="summaryText" class="summary-area" readonly></textarea>
 
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px;">
-            <button id="copySummaryBtn" class="action-btn secondary-btn" type="button">📋 Copiar Resumen</button>
-            <button id="downloadCsvBtn" class="action-btn" type="button">💾 Descargar CSV</button>
+            <button id="copySummaryBtn" class="action-btn secondary-btn" type="button">Copiar resumen</button>
+            <button id="downloadCsvBtn" class="action-btn" type="button">Descargar CSV</button>
           </div>
         </div>
       </div>
@@ -1025,7 +1085,7 @@
   </main>
 </div>
 
-<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.12.5 · prototipo no validado clínicamente</p>
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.12.6 · prototipo no validado clínicamente</p>
 <script type="module" src="./terapeuta.js"></script>
 <script>
 if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); }); }

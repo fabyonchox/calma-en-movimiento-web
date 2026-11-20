@@ -2,7 +2,7 @@ import { getSyncServerUrl, getSessionCode } from './sync-config.js';
 import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure, APPLE_LEVEL_ES, FAIR_LEVEL_ES } from './logic.js';
 import { PatientsPanel } from './pacientes.js';
 
-const APP_VERSION = '0.12.5';
+const APP_VERSION = '0.12.6';
 
 let ws = null;
 let currentRoom = getSessionCode() || 'HOSPITAL-1';
@@ -161,7 +161,7 @@ function markDirty() {
 
 function resetApplyButton() {
   const b = $('applyCfgBtn');
-  if (b) b.textContent = '📤 Enviar Configuración al Visor';
+  if (b) b.textContent = 'Enviar configuración al visor';
 }
 
 /* ---------- Conexión WebSocket ---------- */
@@ -234,6 +234,7 @@ function setServerState(state) {
     serverDot.className = 'status-dot online';
     serverStatusText.textContent = 'En línea (Servidor)';
     offlineBanner.classList.remove('visible');
+    if ($('retryWsBtn')) $('retryWsBtn').hidden = true;
   } else if (state === 'connecting') {
     serverDot.className = 'status-dot connecting';
     serverStatusText.textContent = 'Conectando...';
@@ -241,6 +242,7 @@ function setServerState(state) {
     serverDot.className = 'status-dot offline';
     serverStatusText.textContent = 'Desconectado';
     offlineBanner.classList.add('visible');
+    if ($('retryWsBtn')) $('retryWsBtn').hidden = false;
   }
 }
 
@@ -266,10 +268,10 @@ function setHeadsetState(online) {
   isHeadsetOnline = online;
   updateRoomBanner();
   if (online) {
-    headsetStatusText.textContent = 'Visor conectado 🟢';
+    headsetStatusText.textContent = 'Visor conectado';
     headsetStatusText.style.color = 'var(--acc)';
   } else {
-    headsetStatusText.textContent = 'Esperando visor... ⏳';
+    headsetStatusText.textContent = 'Esperando visor';
     headsetStatusText.style.color = 'var(--muted)';
   }
 }
@@ -349,10 +351,30 @@ function handleMessage(msg) {
 
 /* ---------- Tarjeta espejo ---------- */
 
+// Nombres de las fases para el terapeuta, y en qué paso de la sesión va el paciente
+const PHASE_ES = { idle: 'Sin sesión', settle: 'Preparando', calib: 'Calibración', painBefore: 'Dolor inicial', ready: 'Listo para empezar', play: 'Jugando', pause: 'En pausa', painAfter: 'Dolor final', satisfaction: 'Encuesta', adverse: 'Encuesta', results: 'Resumen', rest: 'Descanso', bye: 'Terminada' };
+const STEP_OF = { calib: 'calib', painBefore: 'pain', ready: 'play', play: 'play', pause: 'play', painAfter: 'survey', satisfaction: 'survey', adverse: 'survey', results: 'results', rest: 'results', bye: 'results' };
+const STEP_ORDER = ['calib', 'pain', 'play', 'survey', 'results'];
+let lastPhaseSeen = null;
+function updateSteps(phase, cfg) {
+  const now = STEP_OF[phase];
+  const i = now ? STEP_ORDER.indexOf(now) : -1;
+  const noCalib = cfg && cfg.gameMode === 'breath'; // Respira no calibra alcance
+  document.querySelectorAll('#phaseSteps li').forEach((li, k) => {
+    const step = li.dataset.step;
+    li.dataset.state = step === 'calib' && noCalib ? 'skip' : k < i ? 'done' : k === i ? 'now' : '';
+  });
+}
+
 function renderMirrorState(state) {
   lastState = state;
   currentPhase = state.phase;
-  currentPhaseBadge.textContent = 'Fase: ' + String(state.phase || '-').toUpperCase();
+  const prevPhase = lastPhaseSeen;
+  lastPhaseSeen = state.phase;
+  currentPhaseBadge.textContent = PHASE_ES[state.phase] || 'Sin sesión';
+  updateSteps(state.phase, lastState && lastState.config ? lastState.config : currentMetrics.config);
+  // La pantalla acompaña la sesión: al empezar (sale de «sin sesión»), pasa sola a «Sesión en vivo»
+  if ((!prevPhase || prevPhase === 'idle') && state.phase && !['idle', 'bye'].includes(state.phase)) showTab('live');
   updateSessionNote();
   updatePauseButton();
   updateRoomBanner();
@@ -367,7 +389,7 @@ function renderMirrorState(state) {
     const nb = document.createElement('button');
     nb.type = 'button';
     nb.className = 'action-btn';
-    nb.textContent = '🔄 Nueva sesión';
+    nb.textContent = 'Nueva sesión';
     nb.onclick = startNewSession;
     mirrorButtonsContainer.appendChild(nb);
     return;
@@ -462,7 +484,7 @@ function appendRestControls() {
     mirrorButtonsContainer.appendChild(b);
   };
   mk('▶ Nueva sesión (mismo paciente, mismo alcance)', '', () => startNewSessionInVR(false));
-  mk('🎯 Nueva sesión con calibración (otro paciente)', 'secondary-btn', () => startNewSessionInVR(true));
+  mk('Nueva sesión con calibración (otro paciente)', 'secondary-btn', () => startNewSessionInVR(true));
   mk('⏏ Cerrar realidad virtual', 'secondary-btn', () => {
     if (confirm('¿Cerrar la realidad virtual del paciente? Después habrá que volver a tocar «Entrar en Realidad Virtual» en el visor.')) {
       triggerRemoteButton('leave');
@@ -502,7 +524,7 @@ function updateSessionNote() {
 function updatePauseButton() {
   const b = $('directPauseBtn');
   if (!b) return;
-  b.textContent = currentPhase === 'pause' ? '▶ Reanudar' : '⏸ Pausar';
+  b.textContent = currentPhase === 'pause' ? 'Reanudar' : 'Pausar';
 }
 
 // Fases del visor en que se puede recargar sin perder datos (igual que en game.js)
@@ -635,7 +657,8 @@ function applyLocalReset() {
   }
   currentPhase = 'idle';
   lastState = null;
-  currentPhaseBadge.textContent = 'Fase: -';
+  currentPhaseBadge.textContent = 'Sin sesión';
+  updateSteps('idle');
   mirrorTitle.textContent = 'Lista para una nueva sesión';
   mirrorLines.textContent = 'Revisa la configuración y pide que toquen «Entrar en Realidad Virtual» en el visor.';
   mirrorButtonsContainer.innerHTML = '';
@@ -688,7 +711,7 @@ $('applyCfgBtn').onclick = () => {
     return;
   }
   send({ type: 'config_update', config: readConfigFromForm() });
-  $('applyCfgBtn').textContent = '⏳ Enviando…';
+  $('applyCfgBtn').textContent = 'Enviando…';
   setCfgStatus('Enviando…');
 };
 Object.values(CFG_FIELDS).forEach((id) => {
@@ -704,6 +727,7 @@ function syncGameUI() {
   const sel = $('cfgMode');
   if (!sel) return;
   const mode = sel.value;
+  const panel = document.getElementById('tab-config'); if (panel) panel.dataset.mode = mode; // oculta lo que no aplica a este juego
   document.querySelectorAll('.game-card').forEach((card) => {
     const on = card.dataset.game === mode;
     card.classList.toggle('on', on);
@@ -888,10 +912,11 @@ function updateRoomBanner() {
   // Casco conocido: título «Casco N» y el código de sala pequeño al lado. Sala personalizada: se muestra el código.
   code.textContent = m ? 'Casco ' + m[1] : currentRoom;
   $('rbCasco').textContent = m ? currentRoom : 'Sala personalizada';
-  const st = $('rbState');
-  if (!isConnected) { st.textContent = 'Sin conexión con el servidor'; st.dataset.on = '-1'; }
-  else if (isHeadsetOnline) { st.textContent = 'Visor conectado 🟢'; st.dataset.on = '1'; }
-  else { st.textContent = 'Esperando visor… ⏳'; st.dataset.on = '0'; }
+  // Un solo estado: servidor y visor juntos
+  const st = $('rbState'); const stt = $('rbStateText');
+  if (!isConnected) { stt.textContent = 'Sin conexión con el servidor'; st.dataset.on = '-1'; }
+  else if (isHeadsetOnline) { stt.textContent = 'Visor conectado'; st.dataset.on = '1'; }
+  else { stt.textContent = 'Esperando visor'; st.dataset.on = '0'; }
   document.querySelectorAll('.rb-pill').forEach((b) => b.setAttribute('aria-pressed', b.dataset.room === currentRoom ? 'true' : 'false'));
   if ($('liveDot')) $('liveDot').hidden = !isHeadsetOnline;
 
@@ -901,7 +926,7 @@ function updateRoomBanner() {
     const seen = isHeadsetOnline && currentMetrics.config; // ya llegó información del visor
     if (!seen) { ver.textContent = ''; ver.dataset.warn = '0'; }
     else if (currentMetrics.version === APP_VERSION) { ver.textContent = 'Visor v' + APP_VERSION; ver.dataset.warn = '0'; }
-    else { ver.textContent = '⚠ Visor desactualizado' + (currentMetrics.version ? ' (v' + currentMetrics.version + ')' : ''); ver.dataset.warn = '1'; }
+    else { ver.textContent = 'Visor desactualizado' + (currentMetrics.version ? ' (v' + currentMetrics.version + ')' : ''); ver.dataset.warn = '1'; }
   }
   // Aviso de dos visores en el mismo casco (más importante que la versión: recargar no lo arregla)
   const two = $('rbTwo');
@@ -914,7 +939,7 @@ function updateRoomBanner() {
     const ok = RELOAD_OK_PHASES.includes(currentPhase);
     rb.disabled = !ok;
     rb.title = ok ? 'Recarga la página del visor con la versión más nueva' : 'Disponible al terminar el juego y la encuesta';
-    rb.textContent = ok ? '🔄 Recargar visor' : '🔄 Recargar visor (al terminar la sesión)';
+    rb.textContent = ok ? 'Recargar visor' : 'Recargar visor (al terminar la sesión)';
   }
 }
 

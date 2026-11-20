@@ -2914,7 +2914,7 @@ function loop() {
 
 initForm();
 
-export const APP_VERSION = '0.12.5';
+export const APP_VERSION = '0.12.6';
 export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; }, get breathScene() { return breathScene; }, get spaceScene() { return spaceScene; }, get gardenEnv() { return gardenEnv; }, get spaceK() { return spaceK; }, get landscapeScene() { return landscapeScene; }, get paisK() { return paisK; }, startPlay,
   // Vista previa del viaje por el espacio (k: 0..1) y del atardecer/noche (d: 0..2)
   previewSpace(k, d = 2, secs = 2) { if (!spaceScene) spaceScene = new SpaceScene(THREE, anchor); spaceK = k; spaceScene.setAmount(k); setGardenFade(1 - k); for (let i = 0; i < 60; i++) { duskTo(d, 0.2); spaceScene.step(secs / 60, 0.5); } } };
