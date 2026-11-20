@@ -2,6 +2,8 @@ import * as THREE from './libs/three.module.min.js';
 import { FairScene } from './feria_escena.js';
 import { Guide, GuideVoice } from './guia.js';
 import { Sfx } from './sfx.js';
+import { Spatial } from './audio3d.js';
+import { buildHandVisuals, updateHandBones, setHandLook } from './manos.js';
 import { SpaceScene } from './espacio.js';
 import { LandscapeScene } from './paisaje360.js';
 import { BreathScene } from './respira.js';
@@ -11,6 +13,7 @@ import {
   DEFAULTS, ZONES, SIZES, MESSAGES, normalizeConfig, mergeConfig, REMOTE_KEYS, effectiveDistances, pickTarget,
   horizontalDistance, distance, formatTime, newRecord, buildCSV, buildSummary, sustainedReach,
   MEASURE_LABELS, MEASURE_KEY, sustainedPeak, validateMeasure, buildMeasure, describeMeasure,
+  APPLE_SPEEDS, APPLE_GROUND_Y, moveWaypoint, stepToward, fallStep, warnShake,
 } from './logic.js';
 import { VRPanel } from './vrui.js';
 import { Critters } from './critters.js';
@@ -29,6 +32,7 @@ let critters = null; // animalitos de la pantalla de espera
 let fairScene = null; // escenario Feria de juegos
 let guide = null; // guía: luz con carita que acompaña al paciente
 let sfx = null; // sonidos de interacción
+let spatial = null; // audio 3D (posición de cada sonido + cabeza del paciente)
 let breathScene = null; // Respira: estrella que respira y pajaritos (relajación)
 let hemiLight = null; let sunLight = null; // luces (Respira las atenúa a un atardecer)
 let treeGroup, basketGroup, targetAppleGroup, harvestedApplesGroup, basketRimGlow;
@@ -87,6 +91,8 @@ function broadcastMetrics() {
     uid: S.rec ? S.rec.uid : '',
     comfortReach: S.reach || null,
     measures: S.measures || {},
+    reactAvgMs: S.reactTimes && S.reactTimes.length ? S.reactTimes.reduce((a, b) => a + b, 0) / S.reactTimes.length : 0,
+    reactN: S.reactTimes ? S.reactTimes.length : 0,
     version: APP_VERSION,
   });
 }
@@ -624,52 +630,6 @@ function isControllerGrasping(c) {
 
 /* ================= Articulaciones y Modelos Visuales 3D ================= */
 
-const JOINT_NAMES = [
-  'wrist',
-  'thumb-metacarpal', 'thumb-phalanx-proximal', 'thumb-phalanx-distal', 'thumb-tip',
-  'index-finger-metacarpal', 'index-finger-phalanx-proximal', 'index-finger-phalanx-intermediate', 'index-finger-phalanx-distal', 'index-finger-tip',
-  'middle-finger-metacarpal', 'middle-finger-phalanx-proximal', 'middle-finger-phalanx-intermediate', 'middle-finger-phalanx-distal', 'middle-finger-tip',
-  'ring-finger-metacarpal', 'ring-finger-phalanx-proximal', 'ring-finger-phalanx-intermediate', 'ring-finger-phalanx-distal', 'ring-finger-tip',
-  'pinky-finger-metacarpal', 'pinky-finger-phalanx-proximal', 'pinky-finger-phalanx-intermediate', 'pinky-finger-phalanx-distal', 'pinky-finger-tip'
-];
-
-const BONE_PAIRS = [
-  // Pulgar
-  ['wrist', 'thumb-metacarpal'],
-  ['thumb-metacarpal', 'thumb-phalanx-proximal'],
-  ['thumb-phalanx-proximal', 'thumb-phalanx-distal'],
-  ['thumb-phalanx-distal', 'thumb-tip'],
-  // Índice
-  ['wrist', 'index-finger-metacarpal'],
-  ['index-finger-metacarpal', 'index-finger-phalanx-proximal'],
-  ['index-finger-phalanx-proximal', 'index-finger-phalanx-intermediate'],
-  ['index-finger-phalanx-intermediate', 'index-finger-phalanx-distal'],
-  ['index-finger-phalanx-distal', 'index-finger-tip'],
-  // Medio
-  ['wrist', 'middle-finger-metacarpal'],
-  ['middle-finger-metacarpal', 'middle-finger-phalanx-proximal'],
-  ['middle-finger-phalanx-proximal', 'middle-finger-phalanx-intermediate'],
-  ['middle-finger-phalanx-intermediate', 'middle-finger-phalanx-distal'],
-  ['middle-finger-phalanx-distal', 'middle-finger-tip'],
-  // Anular
-  ['wrist', 'ring-finger-metacarpal'],
-  ['ring-finger-metacarpal', 'ring-finger-phalanx-proximal'],
-  ['ring-finger-phalanx-proximal', 'ring-finger-phalanx-intermediate'],
-  ['ring-finger-phalanx-intermediate', 'ring-finger-phalanx-distal'],
-  ['ring-finger-phalanx-distal', 'ring-finger-tip'],
-  // Meñique
-  ['wrist', 'pinky-finger-metacarpal'],
-  ['pinky-finger-metacarpal', 'pinky-finger-phalanx-proximal'],
-  ['pinky-finger-phalanx-proximal', 'pinky-finger-phalanx-intermediate'],
-  ['pinky-finger-phalanx-intermediate', 'pinky-finger-phalanx-distal'],
-  ['pinky-finger-phalanx-distal', 'pinky-finger-tip'],
-  // Palma / Arco metacarpiano
-  ['thumb-metacarpal', 'index-finger-metacarpal'],
-  ['index-finger-metacarpal', 'middle-finger-metacarpal'],
-  ['middle-finger-metacarpal', 'ring-finger-metacarpal'],
-  ['ring-finger-metacarpal', 'pinky-finger-metacarpal']
-];
-
 function buildControllerVisual(g) {
   if (g.userData.built) return;
   g.userData.built = true;
@@ -710,129 +670,6 @@ function buildControllerVisual(g) {
 
   g.add(group);
   g.userData.visual = group;
-}
-
-function buildHandVisuals(hd) {
-  if (hd.userData.built) return;
-  hd.userData.built = true;
-  hd.joints = hd.joints || {};
-
-  const jointMat = new THREE.MeshStandardMaterial({
-    color: 0xdbf5ea, roughness: 0.35, metalness: 0.08, emissive: 0x1d4d3e, emissiveIntensity: 0.45,
-    transparent: true, opacity: 0.92
-  });
-  const tipMat = new THREE.MeshStandardMaterial({
-    color: 0xa8f5df, roughness: 0.25, metalness: 0.1, emissive: 0x56e2b6, emissiveIntensity: 0.85,
-    transparent: true, opacity: 0.95
-  });
-  const auraMat = new THREE.MeshBasicMaterial({
-    color: 0x76eed3, transparent: true, opacity: 0.38, depthWrite: false
-  });
-
-  for (const name of JOINT_NAMES) {
-    let jGroup = hd.joints[name];
-    if (!jGroup) {
-      jGroup = new THREE.Group();
-      jGroup.matrixAutoUpdate = false;
-      jGroup.visible = true;
-      hd.joints[name] = jGroup;
-      hd.add(jGroup);
-    }
-
-    let radius = 0.009;
-    let mat = jointMat;
-    if (name === 'wrist') {
-      radius = 0.015;
-    } else if (name.endsWith('-tip')) {
-      radius = 0.0095;
-      mat = tipMat;
-    } else if (name.includes('metacarpal')) {
-      radius = 0.011;
-    } else if (name.includes('proximal')) {
-      radius = 0.0095;
-    } else if (name.includes('intermediate')) {
-      radius = 0.0085;
-    } else if (name.includes('distal')) {
-      radius = 0.0075;
-    }
-
-    const sphere = new THREE.Mesh(new THREE.SphereGeometry(radius, 14, 10), mat);
-    jGroup.add(sphere);
-
-    // Halo luminoso en la punta del dedo índice para toque intuitivo
-    if (name === 'index-finger-tip') {
-      const aura = new THREE.Mesh(new THREE.SphereGeometry(0.016, 12, 8), auraMat);
-      jGroup.add(aura);
-    }
-  }
-
-  // Huesos conectores (falanges)
-  const boneMat = new THREE.MeshStandardMaterial({
-    color: 0xc4ede0, roughness: 0.4, emissive: 0x163d30, emissiveIntensity: 0.35,
-    transparent: true, opacity: 0.85
-  });
-  const bones = [];
-  const bonesGroup = new THREE.Group();
-  hd.add(bonesGroup);
-
-  const baseCylGeo = new THREE.CylinderGeometry(0.0035, 0.0035, 1, 8);
-  baseCylGeo.translate(0, 0.5, 0);
-  baseCylGeo.rotateX(Math.PI / 2);
-
-  for (const pair of BONE_PAIRS) {
-    const mesh = new THREE.Mesh(baseCylGeo, boneMat);
-    mesh.visible = false;
-    bonesGroup.add(mesh);
-    bones.push({ mesh, a: pair[0], b: pair[1] });
-  }
-
-  // Cojín de palma
-  const palmMesh = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.016, 0.018, 0.008, 16),
-    jointMat
-  );
-  palmMesh.visible = false;
-  hd.add(palmMesh);
-
-  hd.userData.bones = bones;
-  hd.userData.palmMesh = palmMesh;
-}
-
-function updateHandBones(hd) {
-  if (!hd || !hd.visible || !hd.userData.bones) return;
-  const bones = hd.userData.bones;
-  const joints = hd.joints;
-  if (!joints) return;
-
-  for (let i = 0; i < bones.length; i++) {
-    const b = bones[i];
-    const jA = joints[b.a];
-    const jB = joints[b.b];
-    if (jA && jB && jA.visible && jB.visible) {
-      const dist = jA.position.distanceTo(jB.position);
-      if (dist > 0.002 && dist < 0.15) {
-        b.mesh.position.copy(jA.position);
-        b.mesh.lookAt(jB.position);
-        b.mesh.scale.set(1, 1, dist);
-        b.mesh.visible = true;
-      } else {
-        b.mesh.visible = false;
-      }
-    } else {
-      b.mesh.visible = false;
-    }
-  }
-
-  const palm = hd.userData.palmMesh;
-  const wrist = joints['wrist'];
-  const midMeta = joints['middle-finger-metacarpal'];
-  if (palm && wrist && midMeta && wrist.visible && midMeta.visible) {
-    palm.position.lerpVectors(wrist.position, midMeta.position, 0.55);
-    palm.lookAt(midMeta.position);
-    palm.visible = true;
-  } else if (palm) {
-    palm.visible = false;
-  }
 }
 
 function initThree() {
@@ -896,6 +733,8 @@ function initThree() {
   fairScene = new FairScene(THREE, anchor, fairHost());
   // Sonidos de interacción: se apagan si la retroalimentación es "solo visual"
   sfx = new Sfx(() => audioCtx, () => !!(S.cfg && S.cfg.feedback !== 'visual'));
+  spatial = new Spatial(() => audioCtx, () => anchor, THREE.Vector3);
+  sfx.spatial = spatial;
   guide = new Guide(THREE, anchor, {
     sfx,
     voice: new GuideVoice('audio/guia/'),
@@ -1424,7 +1263,7 @@ function resetCounters() {
     rec: newRecord(S.cfg), committed: false, activeMs: 0, spawned: 0, resolved: 0, hits: 0, pauses: 0,
     reachSum: 0, maxReach: 0, target: null, prevPos: null, age: 0, popT: -1, nextSpawnAt: 0, msgIdx: 0, endedEarly: false, endReason: '',
     targetPoints: [], sparkT: -1,
-    heldApple: null, droppingApple: null, harvestedCount: 0, repsDoneAt: 0,
+    heldApple: null, droppingApple: null, harvestedCount: 0, repsDoneAt: 0, reactTimes: [],
   });
   if (orb) orb.visible = false;
   if (targetAppleGroup) targetAppleGroup.visible = false;
@@ -2095,11 +1934,11 @@ function fairHost() {
     haptic: (ms, k) => triggerHaptic(ms, k),
     sound: (kind, info = {}) => {
       if (!sfx) return;
-      if (kind === 'grab') sfx.ballGrab(info.x);
-      else if (kind === 'throw') sfx.throwWhoosh(info.x, info.speed);
-      else if (kind === 'clank') sfx.canHit(info.x, info.strength);
-      else if (kind === 'land') sfx.canLand(info.x, info.onFloor);
-      else if (kind === 'bounce') sfx.ballBounce(info.x, info.speed);
+      if (kind === 'grab') sfx.ballGrab(info);
+      else if (kind === 'throw') sfx.throwWhoosh(info, info.speed);
+      else if (kind === 'clank') sfx.canHit(info, info.strength);
+      else if (kind === 'land') sfx.canLand(info, info.onFloor);
+      else if (kind === 'bounce') sfx.ballBounce(info, info.speed);
       else if (kind === 'rearm' || kind === 'refill') sfx.rearm(0);
     },
     // Cada pelota lanzada es un intento.
@@ -2449,7 +2288,13 @@ function spawnTarget() {
     targetAppleGroup.scale.setScalar(1);
     targetAppleGroup.visible = true;
     targetAppleGroup.userData.aura.material.opacity = 0.3;
+    const lvl = S.cfg.appleLevel || 1;
+    t.pos = { x: t.pos.x, y: t.pos.y, z: t.pos.z }; // copia propia: en los niveles 2 y 3 esta posición cambia
+    t.start = { ...t.pos };
+    t.goal = null;
+    t.fall = lvl === 3 ? { state: 'hang', t: 0, vy: 0 } : null;
     updateAppleTwig(t.pos.y);
+    if (lvl === 2) targetAppleGroup.userData.twig.visible = false; // flota: ya no cuelga de la rama
     return;
   }
 
@@ -2463,7 +2308,7 @@ function spawnTarget() {
   orb.position.set(t.pos.x, t.pos.y, t.pos.z);
   orb.scale.setScalar(0.001);
   orb.visible = true;
-  if (sfx) sfx.lightAppear(t.pos.x);
+  if (sfx) sfx.lightAppear(t.pos);
 }
 
 function chime() {
@@ -2495,7 +2340,7 @@ function chime() {
 let nature = null;
 function startAmbient() {
   if (!audioCtx || !S.cfg.ambient) return;
-  if (!nature) nature = new NatureAmbience(() => audioCtx);
+  if (!nature) nature = new NatureAmbience(() => audioCtx, spatial);
   nature.start();
 }
 
@@ -2572,6 +2417,7 @@ function update(dt, now) {
   // Actualizar animación de huesos para manos articuladas
   for (const c of controllers) {
     if (c.hand && c.hand.visible) {
+      setHandLook(c.hand, S.cfg && S.cfg.handLook);
       updateHandBones(c.hand);
     }
   }
@@ -2720,40 +2566,88 @@ function update(dt, now) {
 
     // 1. Manzana colgada esperando agarre
     if (!S.heldApple && !S.droppingApple && S.popT < 0) {
-      targetAppleGroup.position.y = S.target.pos.y + Math.sin(now * 0.003) * 0.005;
+      // Niveles: 1 = fija | 2 = se mueve despacio (derecha, izquierda, adelante, atrás) | 3 = vibra (aviso) y luego cae despacio
+      const lvl = S.cfg.appleLevel || 1;
+      const spd = APPLE_SPEEDS[S.cfg.appleSpeed] || APPLE_SPEEDS.slow;
+      const T = S.target;
+      let canGrab = true;
+      let grabR = 0.095;
+      if (lvl === 2) {
+        if (!T.goal) T.goal = moveWaypoint(S.cfg, S.dist, T.start);
+        const st = stepToward(T.pos, T.goal, spd.move, dt);
+        T.pos.x = st.pos.x; T.pos.y = st.pos.y; T.pos.z = st.pos.z;
+        if (st.arrived) T.goal = moveWaypoint(S.cfg, S.dist, T.start);
+        targetAppleGroup.position.set(T.pos.x, T.pos.y + Math.sin(now * 0.003) * 0.005, T.pos.z);
+        grabR = 0.105;
+      } else if (lvl === 3 && T.fall) {
+        const F = T.fall;
+        F.t += dt;
+        if (F.state === 'hang') {
+          canGrab = false;
+          targetAppleGroup.position.set(T.start.x, T.start.y + Math.sin(now * 0.003) * 0.005, T.start.z);
+          if (F.t >= 0.9) { F.state = 'warn'; F.t = 0; F.rustled = false; if (sfx) sfx.appleRustle(targetAppleGroup); }
+        } else if (F.state === 'warn') { // la manzana vibra un poco: es la señal de que va a caer
+          canGrab = false;
+          const k = Math.min(1, F.t / spd.warn);
+          const sh = warnShake(F.t, k);
+          targetAppleGroup.position.set(T.start.x + sh.x, T.start.y + sh.y, T.start.z + sh.z);
+          targetAppleGroup.userData.aura.material.opacity = 0.35 + 0.25 * k;
+          if (!F.rustled && k > 0.55) { F.rustled = true; if (sfx) sfx.appleRustle(targetAppleGroup); triggerHaptic(15, 0.15); }
+          if (F.t >= spd.warn) {
+            F.state = 'fall'; F.t = 0; F.vy = 0; F.startMs = now;
+            targetAppleGroup.userData.twig.visible = false; // se soltó de la rama
+          }
+        } else { // cae despacio
+          grabR = 0.115;
+          F.vy = fallStep(F.vy, dt, spd);
+          T.pos.x = T.start.x; T.pos.z = T.start.z; T.pos.y += F.vy * dt;
+          targetAppleGroup.position.set(T.pos.x, T.pos.y, T.pos.z);
+          if (T.pos.y <= APPLE_GROUND_Y) { // llegó al suelo sin que la alcanzaran: se cuenta como no lograda, sin castigo
+            T.hit = false;
+            S.targetPoints.push({ x: T.start.x, y: T.start.y, z: T.start.z, hit: false });
+            S.popT = 0;
+            S.popDur = 0.4;
+            if (sfx) sfx.ballBounce(targetAppleGroup, 0.4);
+            guideMiss();
+          }
+        }
+      } else {
+        targetAppleGroup.position.y = S.target.pos.y + Math.sin(now * 0.003) * 0.005;
+      }
 
       let nearAnyHand = false;
       for (const ctrl of activeCtrls) {
         const handP = handLocal(ctrl);
         const d = distance(handP, targetAppleGroup.position);
 
-        if (d < 0.15) {
+        if (d < 0.15 && canGrab) {
           nearAnyHand = true;
           targetAppleGroup.userData.aura.material.opacity = 0.55;
         }
 
         // Condición de Agarre (Reach + Grasp)
-        if (d < 0.095 && isControllerGrasping(ctrl)) {
+        if (canGrab && d < grabR && isControllerGrasping(ctrl)) {
+          if (lvl === 3 && T.fall) S.reactTimes.push(Math.max(0, now - T.fall.startMs)); // tiempo de reacción desde que empezó a caer
           S.heldApple = {
             mesh: targetAppleGroup,
             ctrl: ctrl,
-            originalPos: { ...S.target.pos },
+            originalPos: { ...(lvl === 3 ? T.start : S.target.pos) },
             grabT: now
           };
           snapStem();
-          if (sfx) sfx.appleSnap(targetAppleGroup.position.x);
+          if (sfx) sfx.appleSnap(targetAppleGroup);
           targetAppleGroup.userData.twig.visible = false;
           triggerHaptic(35, 0.35);
           triggerSparks(targetAppleGroup.position);
           break;
         }
       }
-      if (!nearAnyHand) {
+      if (!nearAnyHand && !(lvl === 3 && T.fall && T.fall.state === 'warn')) {
         targetAppleGroup.userData.aura.material.opacity = 0.25;
       }
 
       // Tiempo límite de permanencia suave
-      if (S.age >= S.cfg.dwell) {
+      if (lvl !== 3 && S.age >= S.cfg.dwell) {
         S.target.hit = false;
         S.targetPoints.push({ x: S.target.pos.x, y: S.target.pos.y, z: S.target.pos.z, hit: false });
         S.popT = 0;
@@ -2791,7 +2685,13 @@ function update(dt, now) {
         } else {
           // Soltó fuera del canasto -> Regresa suavemente a la rama
           targetAppleGroup.position.set(S.heldApple.originalPos.x, S.heldApple.originalPos.y, S.heldApple.originalPos.z);
-          targetAppleGroup.userData.twig.visible = true;
+          const lv = S.cfg.appleLevel || 1;
+          targetAppleGroup.userData.twig.visible = lv !== 2;
+          if (lv === 3 && S.target.fall) { // vuelve a la rama y vuelve a vibrar antes de caer
+            S.target.pos = { ...S.target.start };
+            S.target.fall = { state: 'hang', t: 0, vy: 0 };
+            updateAppleTwig(S.target.start.y);
+          }
           S.heldApple = null;
         }
       }
@@ -2809,7 +2709,7 @@ function update(dt, now) {
 
       if (da.mesh.position.y <= da.targetY) {
         da.mesh.position.y = da.targetY;
-        if (sfx) sfx.appleBasket(da.mesh.position.x, (da.basket || baskets[0]).count); else thudBasket();
+        if (sfx) sfx.appleBasket(da.mesh, (da.basket || baskets[0]).count); else thudBasket();
         chime();
         triggerHaptic(50, 0.45);
         triggerSparks(da.mesh.position);
@@ -2877,7 +2777,7 @@ function update(dt, now) {
       S.targetPoints.push({ x: S.target.pos.x, y: S.target.pos.y, z: S.target.pos.z, hit: false });
       S.popT = 0;
       S.popDur = 0.4;
-      if (sfx) sfx.lightFade(S.target.pos.x);
+      if (sfx) sfx.lightFade(S.target.pos);
       guideMiss();
     }
   } else {
@@ -2931,7 +2831,7 @@ function harvest() {
   }
   triggerSparks(orb.position);
   triggerHaptic(50, 0.45);
-  if (sfx && S.cfg.feedback !== 'visual') sfx.sparkle(orb.position.x); else chime();
+  if (sfx && S.cfg.feedback !== 'visual') sfx.sparkle(orb); else chime();
   guideHit();
 }
 
@@ -2940,12 +2840,16 @@ function loop() {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   if (renderer.xr.isPresenting) update(dt, now);
+  if (spatial) {
+    spatial.enabled = !S.cfg || S.cfg.audio3d !== 'off';
+    if (renderer.xr.isPresenting) spatial.update(renderer.xr.getCamera());
+  }
   renderer.render(scene, camera);
 }
 
 initForm();
 
-export const APP_VERSION = '0.11.0';
+export const APP_VERSION = '0.12.1';
 export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; }, get breathScene() { return breathScene; }, get spaceScene() { return spaceScene; }, get gardenEnv() { return gardenEnv; }, get spaceK() { return spaceK; }, get landscapeScene() { return landscapeScene; }, get paisK() { return paisK; }, startPlay,
   // Vista previa del viaje por el espacio (k: 0..1) y del atardecer/noche (d: 0..2)
   previewSpace(k, d = 2, secs = 2) { if (!spaceScene) spaceScene = new SpaceScene(THREE, anchor); spaceK = k; spaceScene.setAmount(k); setGardenFade(1 - k); for (let i = 0; i < 60; i++) { duskTo(d, 0.2); spaceScene.step(secs / 60, 0.5); } } };

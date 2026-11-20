@@ -7,6 +7,7 @@ export class Sfx {
     this.getCtx = getCtx;
     this.enabled = enabled || (() => true);
     this.noiseBuf = null;
+    this.spatial = null; // audio 3D (audio3d.js); si falta o está apagado, se usa el paneo izquierda/derecha
   }
 
   ctx() {
@@ -15,9 +16,16 @@ export class Sfx {
     return c;
   }
 
+  // x: un punto 3D {x, y, z} (o un objeto 3D) para sonido espacial, o un número (solo izquierda/derecha)
   out(c, x) {
     const g = c.createGain();
     g.gain.value = 1;
+    const is3d = x && typeof x === 'object';
+    if (is3d && this.spatial && this.spatial.on()) {
+      g.connect(this.spatial.panner(c, x)).connect(c.destination);
+      return g;
+    }
+    if (is3d) x = x.isObject3D ? x.position.x : x.x;
     if (c.createStereoPanner && typeof x === 'number') {
       const p = c.createStereoPanner();
       p.pan.value = Math.max(-0.8, Math.min(0.8, x / 0.7));
@@ -100,6 +108,14 @@ export class Sfx {
       this.burst(c, d, { t: 0.05, dur: 0.1, type: 'bandpass', freq: 2600, q: 2, vol: 0.06 });
       // con más manzanas, se oye un poco más "lleno"
       if (count > 2) this.tone(c, d, { t: 0.04, freq: 220, freqEnd: 120, dur: 0.1, vol: 0.08 });
+    });
+  }
+
+  // Aviso antes de caer (nivel 3): las hojas de la rama se agitan suavemente
+  appleRustle(x) {
+    this.safe((c) => {
+      const d = this.out(c, x);
+      [0, 0.09, 0.2, 0.31].forEach((t, i) => this.burst(c, d, { t, dur: 0.16, type: 'bandpass', freq: 3200 + i * 350, q: 0.9, vol: 0.05 }));
     });
   }
 

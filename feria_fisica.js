@@ -26,17 +26,36 @@ const hyp = Math.hypot;
 
 // Devuelve dónde van el mostrador, los tarros y las bandejas.
 // Regla de seguridad del proyecto: ningún tarro ni bandeja queda más lejos que el alcance cómodo calibrado.
-export function fairLayout(cfg, dist, eyeH = 1.15) {
+// Posiciones posibles del puesto (m hacia los lados, desde su lugar base) y cantidad de tarros por ronda.
+export const FAIR_SHIFT = 0.2;
+const ALL_OFFSETS = [
+  { row: 0, x: -0.105 }, { row: 0, x: 0 }, { row: 0, x: 0.105 },
+  { row: 1, x: -0.0525 }, { row: 1, x: 0.0525 },
+  { row: 2, x: 0 },
+];
+export const FAIR_COUNTS = [3, 4, 5, 6]; // nivel 3: cada ronda con más tarros, hasta la pirámide completa
+
+// Variante de la ronda n (0 = la primera), según el nivel que eligió el terapeuta:
+//   nivel 1: siempre igual (como siempre) | nivel 2: el puesto cambia de lugar (centro, derecha, izquierda) |
+//   nivel 3: además cambia la cantidad de tarros (3, 4, 5 y luego 6).
+// Con el lado elegido (derecha o izquierda) el puesto se mueve solo hacia ese lado.
+export function fairVariant(cfg, round = 0) {
+  const lvl = Number(cfg && cfg.fairLevel) || 1;
+  if (lvl <= 1) return { shift: 0, count: 6 };
+  const S = FAIR_SHIFT;
+  const places = cfg.side === 'right' ? [0, S, S / 2] : cfg.side === 'left' ? [0, -S, -S / 2] : [0, S, -S];
+  const n = Math.max(0, round | 0);
+  return { shift: places[n % places.length], count: lvl >= 3 ? FAIR_COUNTS[Math.min(n, FAIR_COUNTS.length - 1)] : 6 };
+}
+
+export function fairLayout(cfg, dist, eyeH = 1.15, variant = null) {
   const cap = Math.max(0.25, (dist && dist.maxD) || 0.75);
   const side = cfg.side === 'left' ? 'left' : cfg.side === 'right' ? 'right' : 'both';
   const top = Math.min(1.1, Math.max(0.72, eyeH * 0.68)); // altura del mostrador
-  const cx = side === 'right' ? 0.06 : side === 'left' ? -0.06 : 0;
+  const cx = (side === 'right' ? 0.06 : side === 'left' ? -0.06 : 0) + ((variant && variant.shift) || 0);
 
-  const offsets = [
-    { row: 0, x: -0.105 }, { row: 0, x: 0 }, { row: 0, x: 0.105 },
-    { row: 1, x: -0.0525 }, { row: 1, x: 0.0525 },
-    { row: 2, x: 0 },
-  ];
+  const count = Math.min(6, Math.max(3, (variant && variant.count) || 6));
+  const offsets = ALL_OFFSETS.slice(0, count);
   const farthest = (dz) => Math.max(...offsets.map((o) => hyp(cx + o.x, dz)));
 
   // Profundidad del mostrador, según lo que elige el terapeuta (cfg.fairDist), en proporción al alcance cómodo calibrado:
@@ -263,7 +282,7 @@ export class FairWorld {
       if (b.p.y < b.r) { // suelo
         b.p.y = b.r;
         if (b.v.y < 0) {
-          if (b.v.y < -0.6) this.events.push({ type: 'bounce', x: b.p.x, speed: -b.v.y }); // para el sonido
+          if (b.v.y < -0.6) this.events.push({ type: 'bounce', x: b.p.x, y: b.p.y, z: b.p.z, speed: -b.v.y }); // para el sonido
           b.v.y = -b.v.y * 0.45; b.bounces++;
         }
         const f = Math.max(0, 1 - 2.2 * h);
@@ -356,7 +375,7 @@ export class FairWorld {
       const vn = -(b.v.x * nx + b.v.z * nz); // rapidez con la que se acerca al tarro
       // Se empuja la pelota fuera del tarro
       b.p.x = c.p.x + nx * (CAN.r + b.r); b.p.z = c.p.z + nz * (CAN.r + b.r);
-      if (vn > 0.15) this.events.push({ type: 'clank', x: c.p.x, strength: vn }); // pelota contra lata (sonido)
+      if (vn > 0.15) this.events.push({ type: 'clank', x: c.p.x, y: c.p.y, z: c.p.z, strength: vn }); // pelota contra lata (sonido)
       if (vn > KNOCK_SPEED) {
         const info = b.thrown ? { reach: b.releaseReach, point: b.point, ballId: b.id } : null;
         this.knock(c, { x: b.v.x * 0.55, y: 0.25 + Math.max(0, b.v.y) * 0.2, z: b.v.z * 0.55 }, info);
@@ -406,7 +425,7 @@ export class FairWorld {
     const yRest = rest(surface);
     if (c.p.y <= yRest) {
       c.p.y = yRest;
-      if (c.v.y < -0.4) this.events.push({ type: 'land', x: c.p.x, onFloor: surface === 0 }); // para el sonido
+      if (c.v.y < -0.4) this.events.push({ type: 'land', x: c.p.x, y: c.p.y, z: c.p.z, onFloor: surface === 0 }); // para el sonido
       if (c.v.y < 0) c.v.y = -c.v.y * 0.25;
       if (Math.abs(c.v.y) < 0.3) c.v.y = 0;
       const f = Math.max(0, 1 - 4 * h);

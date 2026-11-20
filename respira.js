@@ -490,7 +490,7 @@ export class BreathScene {
         this.birdsDone++;
         if (!this.greetQueue || !this.greetQueue.length) this.greetQueue = greetingOrder();
         this.drawSay(this.greetQueue.shift());
-        if (this.host.sfx) this.host.sfx.birdChirp(p.x);
+        if (this.host.sfx) this.host.sfx.birdChirp(p);
         this.host.onBird && this.host.onBird(this.birdsDone);
       }
       return;
@@ -521,7 +521,7 @@ export class BreathScene {
         this.say.position.set(g.x, g.y + 0.36, g.z);
         this.faceLocal(this.say, h.x, h.y, h.z);
       }
-      if (t > 1.6 && !bird.secondChirp) { bird.secondChirp = true; if (this.host.sfx) this.host.sfx.birdChirp(g.x); }
+      if (t > 1.6 && !bird.secondChirp) { bird.secondChirp = true; if (this.host.sfx) this.host.sfx.birdChirp(g); }
       if (t > 4.8) {
         this.say.visible = false;
         bird.state = 'leave'; bird.t = 0; bird.secondChirp = false;

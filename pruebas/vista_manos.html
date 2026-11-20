@@ -1,0 +1,38 @@
+<!doctype html><meta charset="utf-8"><title>Vista de manos</title>
+<style>html,body{margin:0;background:#cfe6e3}canvas{display:block}</style>
+<script type="module">
+// Vista previa de las manos con articulaciones simuladas. ?look=skin1|skin2|skin3|glow  &pose=open|curl|pinch
+import * as THREE from '../libs/three.module.min.js';
+import { buildHandVisuals, updateHandBones, setHandLook, JOINT_NAMES } from '../manos.js';
+const q = new URLSearchParams(location.search);
+const look = q.get('look') || 'skin2'; const pose = q.get('pose') || 'open';
+const W = 900, H = 520;
+const r = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true }); r.setSize(W, H); document.body.appendChild(r.domElement);
+const scene = new THREE.Scene(); scene.background = new THREE.Color(0xcfe6e3);
+scene.add(new THREE.HemisphereLight(0xfff4dc, 0x7fa274, 1.15));
+const sun = new THREE.DirectionalLight(0xffe7c2, 0.95); sun.position.set(2, 5, 3); scene.add(sun);
+const cam = new THREE.PerspectiveCamera(40, W / H, 0.01, 5); cam.position.set(0.04, 0.22, 0.12); cam.lookAt(0.0, 0, -0.06);
+
+// longitudes (m) de cada tramo por dedo y su base en x
+const F = { 'index-finger': [-0.030, 0.040, 0.025, 0.017], 'middle-finger': [-0.010, 0.044, 0.028, 0.018], 'ring-finger': [0.010, 0.041, 0.026, 0.017], 'pinky-finger': [0.028, 0.032, 0.020, 0.015] };
+function hand(x0, z0, curl) {
+  const hd = new THREE.Group(); scene.add(hd);
+  JOINT_NAMES.forEach((n) => { const g = new THREE.Group(); g.matrixAutoUpdate = false; hd.joints = hd.joints || {}; hd.joints[n] = g; hd.add(g); });
+  const P = {}; P.wrist = [0, 0, 0];
+  P['thumb-metacarpal'] = [-0.024, 0, -0.022]; P['thumb-phalanx-proximal'] = [-0.044, 0.002, -0.050]; P['thumb-phalanx-distal'] = [-0.056, 0.004, -0.074]; P['thumb-tip'] = [-0.064, 0.006, -0.090];
+  for (const [f, [bx, l1, l2, l3]] of Object.entries(F)) {
+    P[f + '-metacarpal'] = [bx * 0.55, 0, -0.018];
+    P[f + '-phalanx-proximal'] = [bx, 0, -0.088];
+    let a = 0, y = 0, z = -0.088, x = bx; const out = [];
+    [l1, l2, l3].forEach((len, i) => { a += curl * (i === 0 ? 0.9 : 1.0); z -= Math.cos(a) * len; y -= Math.sin(a) * len; out.push([x, y, z]); });
+    P[f + '-phalanx-intermediate'] = out[0]; P[f + '-phalanx-distal'] = out[1]; P[f + '-tip'] = out[2];
+  }
+  for (const n of JOINT_NAMES) { const p = P[n]; const g = hd.joints[n]; g.position.set(p[0] + x0, p[1], p[2] + z0); g.matrix.makeTranslation(g.position.x, g.position.y, g.position.z); g.visible = true; }
+  hd.visible = true; buildHandVisuals(hd); setHandLook(hd, look);
+  // el pulgar se acerca al índice en "pinch"
+  if (pose === 'pinch') { const t = hd.joints['index-finger-tip'].position; const g = hd.joints['thumb-tip']; g.position.set(t.x - 0.012, t.y + 0.004, t.z + 0.004); g.matrix.makeTranslation(g.position.x, g.position.y, g.position.z); }
+  updateHandBones(hd); return hd;
+}
+hand(0, 0, pose === 'curl' ? 0.7 : pose === 'pinch' ? 0.35 : 0);
+scene.updateMatrixWorld(true); r.render(scene, cam); document.title = 'listo';
+</script>

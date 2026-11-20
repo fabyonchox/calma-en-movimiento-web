@@ -685,6 +685,31 @@
           </div>
         </div>
         <p class="pc-muted" style="margin:-4px 0 12px; font-size:0.8rem;">Ritmos y rangos son opciones de diseño, no recomendaciones clínicas: el equipo define cuáles usar con cada paciente. En Respira no se mide el alcance y la sesión termina por tiempo.</p>
+        <div class="form-row" style="margin-bottom:12px;">
+          <div>
+            <label for="cfgAppleLevel">Nivel de la Cosecha del Manzano</label>
+            <select id="cfgAppleLevel">
+              <option value="1" selected>Nivel 1: manzana fija</option>
+              <option value="2">Nivel 2: manzana que se mueve</option>
+              <option value="3">Nivel 3: manzana que vibra y cae</option>
+            </select>
+          </div>
+          <div>
+            <label for="cfgAppleSpeed">Velocidad (niveles 2 y 3)</label>
+            <select id="cfgAppleSpeed">
+              <option value="slow" selected>Lenta</option>
+              <option value="medium">Media</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label for="cfgFairLevel">Nivel de la Feria de Juegos</label>
+          <select id="cfgFairLevel">
+            <option value="1" selected>Nivel 1: tarros fijos</option>
+            <option value="2">Nivel 2: el puesto cambia de lugar (centro, derecha, izquierda)</option>
+            <option value="3">Nivel 3: cambia de lugar y aumenta la cantidad de tarros (3, 4, 5, 6)</option>
+          </select>
+        </div>
         <div style="margin-bottom:12px;">
           <label for="cfgFairDist">Distancia de los tarros (solo Feria de Juegos)</label>
           <select id="cfgFairDist">
@@ -717,6 +742,22 @@
               <option value="on">Mostrar "3 de 10" en el visor</option>
             </select>
           </div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label for="cfgHandLook">Aspecto de las manos en el visor</label>
+          <select id="cfgHandLook">
+            <option value="skin1">Natural, piel clara</option>
+            <option value="skin2" selected>Natural, piel media</option>
+            <option value="skin3">Natural, piel oscura</option>
+            <option value="glow">Luminosa (verde translúcida)</option>
+          </select>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label for="cfgAudio3d">Sonido espacial 3D</label>
+          <select id="cfgAudio3d">
+            <option value="on" selected>Activado (cada sonido sale desde donde ocurre)</option>
+            <option value="off">Desactivado (sonido simple izquierda/derecha)</option>
+          </select>
         </div>
 
         <button id="applyCfgBtn" class="action-btn" type="button" style="margin-top:16px;">
@@ -790,7 +831,7 @@
   </main>
 </div>
 
-<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.11.0 · prototipo no validado clínicamente</p>
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.12.1 · prototipo no validado clínicamente</p>
 <script type="module" src="./terapeuta.js"></script>
 <script>
 if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); }); }
