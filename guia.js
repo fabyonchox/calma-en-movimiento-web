@@ -72,6 +72,9 @@ export const PHRASES = {
   p360_vuelta: 'Deja que tu respiración vuelva a su ritmo natural. Quédate un momento aquí.',
   p360_cierre: 'Mueve suavemente los dedos de las manos y de los pies. Cuando estés listo, terminamos.',
   resp_un_poco_mas: 'Un poquito más…',
+  // Manzano nivel 3: manzanas hacia los lados
+  mira_derecha: 'Mira hacia tu derecha: ahí viene una manzana.',
+  mira_izquierda: 'Mira hacia tu izquierda: ahí viene una manzana.',
 };
 
 function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }

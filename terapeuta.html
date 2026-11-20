@@ -641,6 +641,14 @@
                     <option value="medium">Media</option>
                   </select>
                 </div>
+                <div>
+                  <label for="cfgAppleArc">Hacia los lados (nivel 3)</label>
+                  <select id="cfgAppleArc">
+                    <option value="frente">Al frente (hasta 35°)</option>
+                    <option value="amplio" selected>Amplio (hasta 60°: girar cabeza y tronco)</option>
+                    <option value="completo">Muy amplio (hasta 85°)</option>
+                  </select>
+                </div>
               </div>
             </div>
           </section>
@@ -1000,7 +1008,7 @@
   </main>
 </div>
 
-<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.12.3 · prototipo no validado clínicamente</p>
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.12.4 · prototipo no validado clínicamente</p>
 <script type="module" src="./terapeuta.js"></script>
 <script>
 if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); }); }

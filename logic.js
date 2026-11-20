@@ -29,6 +29,7 @@ export const DEFAULTS = {
   limitReach: true,
   appleLevel: 1, // Cosecha del Manzano: 1 manzana fija | 2 manzana que se mueve | 3 manzana que vibra y cae (lento)
   appleSpeed: 'slow', // velocidad de los niveles 2 y 3: 'slow' | 'medium'
+  appleArc: 'amplio', // nivel 3: hasta dónde a los lados aparecen las manzanas: 'frente' (35°) | 'amplio' (60°) | 'completo' (85°)
   handLook: 'skin2', // aspecto de las manos en el visor: 'skin1' clara | 'skin2' media | 'skin3' oscura | 'glow' luminosa
   guide: 'on', // guía (luz con carita): 'on' | 'off'
   guideProgress: 'off', // ventanita '3 de 10' junto al guía en el visor: 'on' | 'off'
@@ -74,6 +75,7 @@ export function normalizeConfig(raw = {}) {
   c.ambient = !!c.ambient;
   c.appleLevel = [1, 2, 3].includes(Number(c.appleLevel)) ? Number(c.appleLevel) : DEFAULTS.appleLevel;
   c.appleSpeed = ['slow', 'medium'].includes(c.appleSpeed) ? c.appleSpeed : DEFAULTS.appleSpeed;
+  c.appleArc = ['frente', 'amplio', 'completo'].includes(c.appleArc) ? c.appleArc : DEFAULTS.appleArc;
   c.handLook = ['skin1', 'skin2', 'skin3', 'glow'].includes(c.handLook) ? c.handLook : DEFAULTS.handLook;
   c.audio3d = c.audio3d === 'off' || c.audio3d === false ? 'off' : 'on';
   c.limitReach = !!c.limitReach;
@@ -106,7 +108,7 @@ export function normalizeConfig(raw = {}) {
 }
 
 // Campos que la tablet del evaluador puede cambiar en el visor. Cualquier otro campo se ignora.
-export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'audio3d', 'handLook', 'appleLevel', 'appleSpeed', 'fairLevel', 'guide', 'guideProgress', 'fairDist', 'breathPattern', 'neckRange', 'breathContent', 'breathLandscape', 'breathGuidedMin', 'breathSettle', 'breathCount', 'breathVoice', 'breathVisual'];
+export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'audio3d', 'handLook', 'appleLevel', 'appleSpeed', 'appleArc', 'fairLevel', 'guide', 'guideProgress', 'fairDist', 'breathPattern', 'neckRange', 'breathContent', 'breathLandscape', 'breathGuidedMin', 'breathSettle', 'breathCount', 'breathVoice', 'breathVisual'];
 
 // Mezcla la configuración actual del visor con la que manda la tablet y la normaliza.
 export function mergeConfig(current, incoming) {
@@ -364,20 +366,29 @@ export function stepToward(pos, goal, speed, dt) {
 export const FALL_DEPTHS = [0.12, 1.0, 0.58]; // fracción del rango de alcance: cerca → lejos → media (se repite)
 // Altura de partida sobre los ojos: más alta cuanto más lejos, así se mira hacia arriba con un ángulo parecido (~35°)
 export const FALL_START_ABOVE = { min: 0.28, max: 0.58 };
+// Arco a los lados (grados desde el frente) para el nivel 3: obliga a girar cabeza y tronco (plano transversal),
+// además de la profundidad (sagital) y la altura de la caída (frontal/vertical). Valores técnicos, a confirmar.
+export const APPLE_ARCS = { frente: 35, amplio: 60, completo: 85 };
+// Recorrido del ángulo: va alternando lados y abriéndose y cerrándose (fracción del arco; + = derecha)
+const ARC_SEQ_BOTH = [0.15, -0.55, 0.9, -0.25, 0.6, -1.0, 0.35, -0.8, 1.0];
+const ARC_SEQ_ONE = [0.1, 0.55, 1.0, 0.3, 0.8, -0.1, 0.65, 0.2, 0.95]; // un solo lado (el elegido); casi nada al otro lado
+
 export function fallStart(cfg, dist, n = 0, rng = Math.random) {
   const b = targetBounds(cfg, dist);
   const eyeH = typeof cfg.eyeH === 'number' && cfg.eyeH > 0.5 ? cfg.eyeH : 1.15;
   const f = FALL_DEPTHS[((n % FALL_DEPTHS.length) + FALL_DEPTHS.length) % FALL_DEPTHS.length];
   const r = b.minD + (b.maxD - b.minD) * Math.min(1, Math.max(0, f + (rng() - 0.5) * 0.12));
-  const maxLat = Math.min(0.35, r * 0.55);
-  let lo = -maxLat; let hi = maxLat;
-  if (cfg.side === 'right') lo = -0.10 * maxLat;
-  else if (cfg.side === 'left') hi = 0.10 * maxLat;
-  const x = lo + rng() * (hi - lo);
-  const z = -Math.sqrt(Math.max(0.0025, r * r - x * x));
+  const arc = APPLE_ARCS[cfg.appleArc] || APPLE_ARCS.amplio;
+  const seq = cfg.side === 'right' || cfg.side === 'left' ? ARC_SEQ_ONE : ARC_SEQ_BOTH;
+  let frac = seq[((n % seq.length) + seq.length) % seq.length] + (rng() - 0.5) * 0.1;
+  frac = Math.max(-1, Math.min(1, frac));
+  if (cfg.side === 'left') frac = -frac; // lado izquierdo: el mismo recorrido, en espejo
+  const az = (frac * arc * Math.PI) / 180;
+  const x = Math.sin(az) * r;
+  const z = -Math.cos(az) * r;
   const fr = (r - b.minD) / Math.max(0.01, b.maxD - b.minD);
   const y = Math.min(2.05, eyeH + FALL_START_ABOVE.min + (FALL_START_ABOVE.max - FALL_START_ABOVE.min) * fr + (rng() - 0.5) * 0.04);
-  return { x, y, z, r, band: f };
+  return { x, y, z, r, band: f, azDeg: (az * 180) / Math.PI };
 }
 
 // Nivel 3: caída suave. Acelera poco a poco hasta una velocidad máxima baja.

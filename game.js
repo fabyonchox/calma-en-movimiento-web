@@ -2248,6 +2248,7 @@ function endPlay(early, reason) {
   if (breathScene) breathScene.stop();
   if (landscapeScene) landscapeScene.stop();
   showFallShadow(false);
+  showSideBranch(null);
   if (orb) orb.visible = false;
   if (sparkPoints) sparkPoints.visible = false;
   if (targetAppleGroup) targetAppleGroup.visible = false;
@@ -2272,6 +2273,27 @@ function finishRequested(isRemote) {
   } else if (['settle', 'calib', 'painBefore', 'ready', 'play', 'pause'].includes(S.phase)) {
     endPlay(true, reason);
   }
+}
+
+// Rama con hojas para las manzanas que caen hacia los lados (lejos de la copa del manzano)
+let sideBranch = null;
+function showSideBranch(p) {
+  if (!p) { if (sideBranch) sideBranch.visible = false; return; }
+  if (!sideBranch && anchor) {
+    sideBranch = new THREE.Group();
+    const leaf = new THREE.MeshLambertMaterial({ color: 0xffffff, map: leafTexture(THREE, 0x4f9456) });
+    [[0, 0, 0, 0.2], [0.17, -0.03, 0.05, 0.14], [-0.15, 0.02, -0.04, 0.15], [0.03, 0.09, -0.12, 0.13]].forEach(([x, y, z, r], i) => {
+      const m = organicSphere(THREE, r, leaf, { seed: 40 + i, bump: 0.14, w: 18, h: 14 });
+      m.position.set(x, y, z); sideBranch.add(m);
+    });
+    const wood = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.028, 0.7, 8), new THREE.MeshLambertMaterial({ color: 0x6b4a2f }));
+    wood.rotation.z = Math.PI / 2.4; wood.position.set(0.2, -0.05, 0); sideBranch.add(wood);
+    anchor.add(sideBranch);
+  }
+  if (!sideBranch) return;
+  sideBranch.visible = true;
+  sideBranch.position.set(p.x, Math.max(p.y + 0.3, CANOPY_BOTTOM + 0.12), p.z);
+  sideBranch.rotation.y = Math.atan2(p.x, -p.z);
 }
 
 // Sombra de la manzana en el pasto (nivel 3): ayuda a calcular la profundidad y cuánto falta para que llegue abajo
@@ -2316,8 +2338,15 @@ function spawnTarget() {
       t.start = { ...t.pos };
       targetAppleGroup.position.set(t.pos.x, t.pos.y, t.pos.z);
       updateAppleTwig(t.pos.y);
+      // Hacia los lados: más tiempo colgando para encontrarla, una rama con hojas que la sostiene y el guía avisa hacia dónde mirar
+      const side = Math.abs(fs.azDeg);
+      t.fall.hangSecs = 0.9 + 1.6 * Math.min(1, side / 85);
+      showSideBranch(side > 28 ? t.pos : null);
+      if (side > 28 && sfx) sfx.appleRustle(targetAppleGroup); // el sonido de las hojas sale desde donde está (audio 3D)
+      if (side >= 45 && guide) guide.say(fs.azDeg > 0 ? 'mira_derecha' : 'mira_izquierda', 'coach');
     }
     showFallShadow(lvl === 3);
+    if (lvl !== 3) showSideBranch(null);
     updateAppleTwig(t.pos.y);
     if (lvl === 2) targetAppleGroup.userData.twig.visible = false; // flota: ya no cuelga de la rama
     return;
@@ -2610,7 +2639,7 @@ function update(dt, now) {
         if (F.state === 'hang') {
           canGrab = false;
           targetAppleGroup.position.set(T.start.x, T.start.y + Math.sin(now * 0.003) * 0.005, T.start.z);
-          if (F.t >= 0.9) { F.state = 'warn'; F.t = 0; F.rustled = false; if (sfx) sfx.appleRustle(targetAppleGroup); }
+          if (F.t >= (F.hangSecs || 0.9)) { F.state = 'warn'; F.t = 0; F.rustled = false; if (sfx) sfx.appleRustle(targetAppleGroup); }
         } else if (F.state === 'warn') { // la manzana vibra un poco: es la señal de que va a caer
           canGrab = false;
           const k = Math.min(1, F.t / spd.warn);
@@ -2876,7 +2905,7 @@ function loop() {
 
 initForm();
 
-export const APP_VERSION = '0.12.3';
+export const APP_VERSION = '0.12.4';
 export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; }, get breathScene() { return breathScene; }, get spaceScene() { return spaceScene; }, get gardenEnv() { return gardenEnv; }, get spaceK() { return spaceK; }, get landscapeScene() { return landscapeScene; }, get paisK() { return paisK; }, startPlay,
   // Vista previa del viaje por el espacio (k: 0..1) y del atardecer/noche (d: 0..2)
   previewSpace(k, d = 2, secs = 2) { if (!spaceScene) spaceScene = new SpaceScene(THREE, anchor); spaceK = k; spaceScene.setAmount(k); setGardenFade(1 - k); for (let i = 0; i < 60; i++) { duskTo(d, 0.2); spaceScene.step(secs / 60, 0.5); } } };
