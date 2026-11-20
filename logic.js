@@ -43,6 +43,7 @@ export const DEFAULTS = {
   breathGuidedMin: 5, // minutos de respiración guiada: 3 | 5 | 8 | 10
   breathSettle: 'on', // llegada y vuelta a la calma (1 min cada una): 'on' | 'off'
   breathCount: 'off', // cuenta de segundos visible: 'on' | 'off'
+  breathVisual: 'barra', // guía visual de Respira 360: 'barra' | 'flor' | 'luz'
   breathVoice: 'inicio', // voz del guía: 'inicio' (primeras respiraciones) | 'todas' | 'off'
 };
 
@@ -88,6 +89,7 @@ export function normalizeConfig(raw = {}) {
   c.breathSettle = c.breathSettle === 'off' || c.breathSettle === false ? 'off' : 'on';
   c.breathCount = c.breathCount === 'on' || c.breathCount === true ? 'on' : 'off';
   c.breathVoice = ['inicio', 'todas', 'off'].includes(c.breathVoice) ? c.breathVoice : DEFAULTS.breathVoice;
+  c.breathVisual = ['barra', 'flor', 'luz'].includes(c.breathVisual) ? c.breathVisual : DEFAULTS.breathVisual;
 
   c.minH = clamp(num(c.minH, DEFAULTS.minH), 0.3, 2.0);
   c.maxH = clamp(num(c.maxH, DEFAULTS.maxH), 0.4, 2.2);
@@ -104,7 +106,7 @@ export function normalizeConfig(raw = {}) {
 }
 
 // Campos que la tablet del evaluador puede cambiar en el visor. Cualquier otro campo se ignora.
-export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'audio3d', 'handLook', 'appleLevel', 'appleSpeed', 'fairLevel', 'guide', 'guideProgress', 'fairDist', 'breathPattern', 'neckRange', 'breathContent', 'breathLandscape', 'breathGuidedMin', 'breathSettle', 'breathCount', 'breathVoice'];
+export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'audio3d', 'handLook', 'appleLevel', 'appleSpeed', 'fairLevel', 'guide', 'guideProgress', 'fairDist', 'breathPattern', 'neckRange', 'breathContent', 'breathLandscape', 'breathGuidedMin', 'breathSettle', 'breathCount', 'breathVoice', 'breathVisual'];
 
 // Mezcla la configuración actual del visor con la que manda la tablet y la normaliza.
 export function mergeConfig(current, incoming) {

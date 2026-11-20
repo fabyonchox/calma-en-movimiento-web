@@ -2,7 +2,7 @@ import { getSyncServerUrl, getSessionCode } from './sync-config.js';
 import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure, APPLE_LEVEL_ES, FAIR_LEVEL_ES } from './logic.js';
 import { PatientsPanel } from './pacientes.js';
 
-const APP_VERSION = '0.12.2';
+const APP_VERSION = '0.12.3';
 
 let ws = null;
 let currentRoom = getSessionCode() || 'HOSPITAL-1';
@@ -62,7 +62,7 @@ const CFG_FIELDS = {
   minutes: 'cfgMin', reps: 'cfgReps', dwell: 'cfgDwell', size: 'cfgSize', feedback: 'cfgFeedback',
   guide: 'cfgGuide', guideProgress: 'cfgGuideProgress', fairDist: 'cfgFairDist', audio3d: 'cfgAudio3d', handLook: 'cfgHandLook', appleLevel: 'cfgAppleLevel', appleSpeed: 'cfgAppleSpeed', fairLevel: 'cfgFairLevel',
   breathPattern: 'cfgBreathPattern', neckRange: 'cfgNeckRange', breathContent: 'cfgBreathContent',
-  breathLandscape: 'cfgBreathLandscape', breathGuidedMin: 'cfgBreathGuidedMin', breathSettle: 'cfgBreathSettle', breathCount: 'cfgBreathCount', breathVoice: 'cfgBreathVoice',
+  breathLandscape: 'cfgBreathLandscape', breathGuidedMin: 'cfgBreathGuidedMin', breathSettle: 'cfgBreathSettle', breathCount: 'cfgBreathCount', breathVoice: 'cfgBreathVoice', breathVisual: 'cfgBreathVisual',
 };
 
 // Las zonas salen de la misma lista que usa el visor (así lo que se elige aquí es lo que se registra allá).
@@ -123,7 +123,7 @@ function modeLabel(c) {
 function describeConfig(c) {
   if (!c) return '';
   if (c.gameMode === 'breath' && c.breathContent === 'paisaje') {
-    return ['Respira 360', LAND_ES[c.breathLandscape] || c.breathLandscape, 'ritmo ' + c.breathPattern, (c.breathGuidedMin || 5) + ' min guiados',
+    return ['Respira 360', LAND_ES[c.breathLandscape] || c.breathLandscape, 'ritmo ' + c.breathPattern, 'guía: ' + ({ barra: 'barra', flor: 'flor', luz: 'luz' }[c.breathVisual] || 'barra'), (c.breathGuidedMin || 5) + ' min guiados',
       c.breathSettle === 'off' ? 'sin llegada ni vuelta' : 'con llegada y vuelta a la calma', c.guide === 'off' ? 'sin guía' : 'con voz del guía'].join(' · ');
   }
   return [

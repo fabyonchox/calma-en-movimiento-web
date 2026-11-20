@@ -1,7 +1,7 @@
 // Service worker de Calma en Movimiento: permite abrir el juego (y la pantalla del terapeuta) sin internet.
 // Con internet SIEMPRE se usa la versión más nueva (red primero, sin copias del navegador); sin internet o con red muy lenta (8 s), la última copia guardada.
 // Para publicar una versión nueva no hace falta tocar nada aquí: la red tiene prioridad.
-const CACHE = 'calma-v18';
+const CACHE = 'calma-v19';
 const ASSETS = [
   './', './index.html', './terapeuta.html', './game.js', './logic.js', './vrui.js', './sync-client.js', './sync-config.js',
   './terapeuta.js', './pacientes.js', './pacientes-config.js', './feria_escena.js', './feria_fisica.js', './critters.js', './guia.js', './sfx.js', './audio3d.js', './manos.js', './respira.js', './respira_logica.js', './ambiente.js', './musica.js', './espacio.js', './paisaje360.js', './paisajes/amanecer.jpg', './paisajes/nubes.jpg', './paisajes/atardecer.jpg', './paisajes/noche.jpg', './paisajes/playa.jpg', './paisajes/cascada.jpg', './paisajes/pradera.jpg', './paisajes/bosque.jpg', './fonts/fredoka-latin-600-normal.woff2', './fonts/fredoka-latin-700-normal.woff2', './audio/guia/manifest.json', './libs/three.module.min.js',

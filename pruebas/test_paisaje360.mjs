@@ -40,17 +40,22 @@ assert.equal(patternHolds('caja'), true); assert.equal(patternHolds('4-2-6'), tr
   const sc = new LandscapeScene(THREE, new THREE.Group(), { audioCtx: () => null, soundOn: () => false, onPhase: (n) => phases.push(n), onCycle: (n) => { cyc = n; }, onWord: (w) => words.push(w) });
   sc.configure({ breathLandscape: 'playa', breathGuidedMin: 3, breathSettle: 'on', breathPattern: '4-6', breathCount: 'on' }, 1.15);
   sc.start();
-  let glowInSettle = 0; let glowInGuided = 0;
+  let glowInSettle = 0; let glowInGuided = 0; let maxLanterns = 0;
   for (let i = 0; i < 72 * 400 && !sc.done; i++) {
     sc.step(1 / 72);
-    if (sc.phase === 'llegada') glowInSettle = Math.max(glowInSettle, sc.glowMat.opacity);
-    if (sc.phase === 'guiada' && sc.elapsed > 70) glowInGuided = Math.max(glowInGuided, sc.glowMat.opacity);
+    if (sc.phase === 'llegada') glowInSettle = Math.max(glowInSettle, sc.barFrameMat.opacity);
+    if (sc.phase === 'guiada' && sc.elapsed > 70) { glowInGuided = Math.max(glowInGuided, sc.barFrameMat.opacity); maxLanterns = Math.max(maxLanterns, sc.lanterns.length); }
   }
   assert.deepEqual(phases, ['llegada', 'guiada', 'vuelta', 'cierre', 'fin']);
   assert.ok(sc.done && Math.abs(sc.elapsed - sc.totalSecs()) < 0.1, 'termina sola al tiempo total');
   assert.equal(cyc, 18, '3 min a 6 resp/min = 18 respiraciones');
-  assert.equal(glowInSettle, 0, 'sin luz guía durante la llegada');
-  assert.ok(glowInGuided > 0.3, 'luz guía visible al respirar');
+  assert.ok(glowInSettle > 0 && glowInSettle < glowInGuided, 'en la llegada la guía se ve más tenue que al respirar');
+  assert.ok(glowInGuided > 0.3, 'guía visible al respirar');
+  assert.ok(sc.bar.visible && !sc.flower.visible, 'por defecto, la barra');
   assert.equal(words.slice(0, 2).join(), 'inhale,exhale');
+  assert.ok(maxLanterns >= 8 && maxLanterns <= 14, 'un farolillo por respiración, con tope: ' + maxLanterns);
+  // la barra sube al inhalar
+  const sc2 = new LandscapeScene(THREE, new THREE.Group(), {}); sc2.configure({ breathSettle: 'off', breathGuidedMin: 3, breathPattern: '4-6', breathVisual: 'flor' }, 1.15); sc2.start();
+  assert.ok(sc2.flower.visible && !sc2.bar.visible, 'opción flor');
 }
 console.log('OK: Respira 360');

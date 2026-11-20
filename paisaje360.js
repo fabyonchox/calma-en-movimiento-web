@@ -22,6 +22,15 @@ function rng(seed) {
   return () => { s ^= s << 13; s ^= s >>> 17; s ^= s << 5; return ((s >>> 0) % 100000) / 100000; };
 }
 
+// Elementos 3D sobre cada cielo, para que el lugar se distinga (las fotos "puresky" son solo cielo):
+// agua en calma bajo el horizonte, islas lejanas y, de noche, estrellas nítidas.
+const LOOK = {
+  amanecer: { water: 0x7472c0, waterHi: 0xf4d6e6, island: 0x4f4a86, stars: 0 },
+  nubes: { water: 0x7d9cc0, waterHi: 0xf2f6fb, island: 0x56708c, stars: 0 },
+  atardecer: { water: 0x35507c, waterHi: 0xeaf0f6, island: 0x26364f, stars: 0 },
+  noche: { water: 0x0c1222, waterHi: 0x6d7fa8, island: 0x05080f, stars: 1 },
+};
+
 // Giro de cada foto para que lo más bonito quede al frente (grados; se ajusta al ver la foto en el Quest)
 const YAW = { amanecer: 0, nubes: 0, atardecer: 0, noche: 140, playa: 0, cascada: 0, pradera: 0, bosque: 0 };
 
@@ -104,6 +113,72 @@ function paintLandscape(id) {
     }
   }
   return c;
+}
+
+
+// Agua: degradado radial (claro hacia el horizonte), reflejo suave al frente y borde que se funde con el cielo
+function waterCanvas(look) {
+  const c = makeCanvas(1024, 1024); if (!c) return null;
+  const g = c.getContext('2d');
+  const R = rng(7);
+  const hex = (n) => '#' + n.toString(16).padStart(6, '0');
+  const grd = g.createRadialGradient(512, 512, 0, 512, 512, 512);
+  grd.addColorStop(0, hex(look.water)); grd.addColorStop(0.75, hex(look.water)); grd.addColorStop(0.97, hex(look.waterHi)); grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 1024, 1024);
+  // ondas suaves (anillos y trazos claros), más finas a lo lejos
+  g.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 1600; i++) {
+    const a = R() * Math.PI * 2; const r = 40 + Math.sqrt(R()) * 460;
+    const len = 6 + (r / 512) * 26; const x = 512 + Math.cos(a) * r; const y = 512 + Math.sin(a) * r;
+    g.strokeStyle = `rgba(255,255,255,${0.03 + R() * 0.06})`; g.lineWidth = 1 + R() * 1.5;
+    g.beginPath(); g.moveTo(x - Math.sin(a) * len, y + Math.cos(a) * len); g.lineTo(x + Math.sin(a) * len, y - Math.cos(a) * len); g.stroke();
+  }
+  // reflejo de luz hacia el frente (el frente es -z: hacia arriba del lienzo)
+  const ref = g.createLinearGradient(512, 512, 512, 0);
+  ref.addColorStop(0, 'rgba(255,240,220,0)'); ref.addColorStop(1, 'rgba(255,240,220,0.09)');
+  g.fillStyle = ref; g.beginPath(); g.moveTo(492, 512); g.lineTo(532, 512); g.lineTo(600, 0); g.lineTo(424, 0); g.closePath(); g.fill();
+  g.globalCompositeOperation = 'source-over';
+  return c;
+}
+
+// Islas lejanas: siluetas bajas repartidas por el horizonte (dejan libre el frente, donde está la guía)
+function islandsGeometry(T, radius, seed) {
+  const R = rng(seed);
+  const pos = []; const idx = [];
+  const segs = 220; let v = 0;
+  const ph = [R() * 6.28, R() * 6.28, R() * 6.28];
+  for (let i = 0; i <= segs; i++) {
+    const a = (i / segs) * Math.PI * 2;
+    const front = Math.cos(a); // 1 = frente
+    const n = 0.5 * Math.sin(a * 3 + ph[0]) + 0.3 * Math.sin(a * 7 + ph[1]) + 0.2 * Math.sin(a * 17 + ph[2]);
+    let h = Math.max(0, n - 0.15) * 9;
+    if (front > 0.9) h *= Math.max(0, (1 - front) / 0.1); // frente despejado
+    const x = Math.sin(a) * radius; const z = -Math.cos(a) * radius;
+    pos.push(x, -0.3, z, x, h, z);
+    if (i < segs) idx.push(v, v + 2, v + 1, v + 1, v + 2, v + 3);
+    v += 2;
+  }
+  const g = new T.BufferGeometry();
+  g.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+  g.setIndex(idx);
+  return g;
+}
+
+function petalShape(T, len, wid) {
+  const sh = new T.Shape();
+  sh.moveTo(0, 0);
+  sh.bezierCurveTo(wid, len * 0.25, wid * 0.8, len * 0.8, 0, len);
+  sh.bezierCurveTo(-wid * 0.8, len * 0.8, -wid, len * 0.25, 0, 0);
+  return sh;
+}
+
+function roundRectShape(T, w, h, r) {
+  const sh = new T.Shape(); const x = -w / 2; const y = -h / 2;
+  sh.moveTo(x + r, y); sh.lineTo(x + w - r, y); sh.quadraticCurveTo(x + w, y, x + w, y + r);
+  sh.lineTo(x + w, y + h - r); sh.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  sh.lineTo(x + r, y + h); sh.quadraticCurveTo(x, y + h, x, y + h - r);
+  sh.lineTo(x, y + r); sh.quadraticCurveTo(x, y, x + r, y);
+  return sh;
 }
 
 /* ---------- Sonido del lugar (Web Audio, sin graves sostenidos bajo 200 Hz) ---------- */
@@ -221,12 +296,67 @@ export class LandscapeScene {
     this.ringMat = new T.MeshBasicMaterial({ color: 0xffe2a0, transparent: true, opacity: 0, depthWrite: false, fog: false });
     this.ring = new T.Mesh(new T.RingGeometry(0.29, 0.3, 96), this.ringMat);
     this.guideGroup.add(this.ring);
+    // --- Barra de respiración: se llena al inhalar y se vacía (y apaga) al exhalar ---
+    this.bar = new T.Group();
+    const BW = 0.2; const BH = 0.8;
+    const frameSh = roundRectShape(T, BW + 0.03, BH + 0.03, 0.115);
+    frameSh.holes.push(roundRectShape(T, BW, BH, 0.1));
+    this.barFrameMat = new T.MeshBasicMaterial({ color: 0xfff3dc, transparent: true, opacity: 0, depthWrite: false, fog: false });
+    this.bar.add(new T.Mesh(new T.ShapeGeometry(frameSh, 24), this.barFrameMat));
+    this.barBackMat = new T.MeshBasicMaterial({ color: 0x1b2440, transparent: true, opacity: 0, depthWrite: false, fog: false });
+    const back = new T.Mesh(new T.ShapeGeometry(roundRectShape(T, BW, BH, 0.1), 24), this.barBackMat);
+    back.position.z = -0.002; this.bar.add(back);
+    // relleno: degradado de turquesa (abajo) a dorado (arriba); crece desde abajo
+    const fillGeo = new T.PlaneGeometry(BW - 0.04, 1, 1, 8);
+    fillGeo.translate(0, 0.5, 0);
+    const cols = []; const pa = fillGeo.attributes.position;
+    const lo = new T.Color(0x5fd0c8); const hi = new T.Color(0xffd27a);
+    for (let i = 0; i < pa.count; i++) { const c = lo.clone().lerp(hi, pa.getY(i)); cols.push(c.r, c.g, c.b); }
+    fillGeo.setAttribute('color', new T.Float32BufferAttribute(cols, 3));
+    this.barFillMat = new T.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, depthWrite: false, fog: false });
+    this.barFill = new T.Mesh(fillGeo, this.barFillMat);
+    this.barFill.position.set(0, -BH / 2 + 0.03, 0.002);
+    this.barFillMax = BH - 0.06;
+    this.bar.add(this.barFill);
+    this.barTipMat = new T.SpriteMaterial({ map: this.glowMat.map, color: 0xffe9b0, transparent: true, depthWrite: false, fog: false, opacity: 0, blending: T.AdditiveBlending });
+    this.barTip = new T.Sprite(this.barTipMat); this.barTip.scale.setScalar(0.3);
+    this.bar.add(this.barTip);
+    this.guideGroup.add(this.bar);
+
+    // --- Flor de luz: se abre al inhalar y se cierra al exhalar ---
+    this.flower = new T.Group();
+    this.petals = [];
+    this.petalMat = new T.MeshBasicMaterial({ color: 0xffc6d9, transparent: true, opacity: 0, side: T.DoubleSide, depthWrite: false, fog: false });
+    this.petalMat2 = new T.MeshBasicMaterial({ color: 0xfff0f5, transparent: true, opacity: 0, side: T.DoubleSide, depthWrite: false, fog: false });
+    [[8, 0.26, 0.085, this.petalMat, 0], [6, 0.17, 0.065, this.petalMat2, Math.PI / 6]].forEach(([n, len, wid, mat, off], layer) => {
+      const geo = new T.ShapeGeometry(petalShape(T, len, wid), 12);
+      for (let i = 0; i < n; i++) {
+        const spin = new T.Group(); spin.rotation.z = off + (i / n) * Math.PI * 2;
+        const hinge = new T.Group(); spin.add(hinge);
+        const m = new T.Mesh(geo, mat); m.position.z = 0.001 * layer; hinge.add(m);
+        this.flower.add(spin); this.petals.push({ hinge, layer });
+      }
+    });
+    this.flowerCoreMat = new T.SpriteMaterial({ map: this.glowMat.map, color: 0xffe2a0, transparent: true, depthWrite: false, fog: false, opacity: 0, blending: T.AdditiveBlending });
+    this.flowerCore = new T.Sprite(this.flowerCoreMat);
+    this.flower.add(this.flowerCore);
+    this.flower.scale.setScalar(1.5);
+    this.guideGroup.add(this.flower);
+
+    // --- Farolillos: cada respiración completa suelta uno que sube despacio al cielo ---
+    this.lanterns = [];
+    this.lanternMat = new T.SpriteMaterial({ map: this.glowMat.map, color: 0xffc47a, transparent: true, depthWrite: false, fog: false, blending: T.AdditiveBlending });
+
+    // --- Agua, islas y estrellas (escenario de los cielos) ---
+    this.scenery = new T.Group();
+    this.group.add(this.scenery);
+
     // Palabra (y cuenta) bajo la luz
     this.wordCanvas = makeCanvas(512, 160);
     this.wordTex = this.wordCanvas ? new T.CanvasTexture(this.wordCanvas) : null;
     if (this.wordTex && T.SRGBColorSpace) this.wordTex.colorSpace = T.SRGBColorSpace;
     this.wordMat = new T.MeshBasicMaterial({ map: this.wordTex, transparent: true, depthWrite: false, fog: false, opacity: 0 });
-    this.word = new T.Mesh(new T.PlaneGeometry(0.62, 0.194), this.wordMat);
+    this.word = new T.Mesh(new T.PlaneGeometry(0.78, 0.244), this.wordMat);
     this.word.position.y = 0.5; // sobre la luz: no choca con el botón de pausa, que está más abajo
     this.guideGroup.add(this.word);
     this.lastText = '';
@@ -241,7 +371,35 @@ export class LandscapeScene {
     this.dome.rotation.y = (YAW[id] || 0) * Math.PI / 180;
     this.guideGroup.position.set(0, this.eyeH - 0.12, -2.2);
     this.plan = landscapePlan(this.cfg.breathGuidedMin, this.cfg.breathSettle !== 'off', this.cfg.breathPattern);
+    this.visual = ['barra', 'flor', 'luz'].includes(this.cfg.breathVisual) ? this.cfg.breathVisual : 'barra';
+    this.bar.visible = this.visual === 'barra';
+    this.flower.visible = this.visual === 'flor';
+    this.glow.visible = this.ring.visible = this.visual === 'luz';
+    this.word.position.y = this.visual === 'barra' ? 0.56 : 0.5;
+    this.buildScenery(id);
     this.setTexture(id);
+  }
+
+  buildScenery(id) {
+    const T = this.T;
+    while (this.scenery.children.length) this.scenery.remove(this.scenery.children[0]);
+    this.sceneryMats = [];
+    const look = LOOK[id];
+    if (!look) return; // los paisajes pintados ya traen su suelo
+    const add = (mesh, full) => { mesh.material.transparent = true; mesh.material.fog = false; mesh.material.opacity = 0; this.sceneryMats.push([mesh.material, full]); this.scenery.add(mesh); return mesh; };
+    const wc = waterCanvas(look);
+    const wt = wc ? new T.CanvasTexture(wc) : null;
+    if (wt && T.SRGBColorSpace) wt.colorSpace = T.SRGBColorSpace;
+    const water = add(new T.Mesh(new T.CircleGeometry(57, 96), new T.MeshBasicMaterial({ map: wt, color: wt ? 0xffffff : look.water, depthWrite: false })), 0.95);
+    water.rotation.x = -Math.PI / 2; water.position.y = 0.02; water.renderOrder = -4;
+    const isl = add(new T.Mesh(islandsGeometry(T, 46, id.length * 31), new T.MeshBasicMaterial({ color: look.island, side: T.DoubleSide, depthWrite: false })), 0.85);
+    isl.renderOrder = -3;
+    if (look.stars) {
+      const R = rng(99); const n = 900; const p = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { const a = R() * Math.PI * 2; const el = Math.asin(0.12 + R() * 0.88); const r = 50; p[i * 3] = Math.cos(el) * Math.sin(a) * r; p[i * 3 + 1] = this.eyeH + Math.sin(el) * r; p[i * 3 + 2] = -Math.cos(el) * Math.cos(a) * r; }
+      const geo = new T.BufferGeometry(); geo.setAttribute('position', new T.BufferAttribute(p, 3));
+      add(new T.Points(geo, new T.PointsMaterial({ size: 0.16, map: this.glowMat.map, color: 0xf3f6ff, blending: T.AdditiveBlending, depthWrite: false })), 0.95);
+    }
   }
 
   // Primero el paisaje pintado (inmediato); si la foto existe, la reemplaza al cargar.
@@ -272,12 +430,14 @@ export class LandscapeScene {
   setAmount(k) {
     this.amount = k;
     this.domeMat.opacity = k;
+    (this.sceneryMats || []).forEach(([m, full]) => { m.opacity = full * k; });
     this.group.visible = k > 0.001 && this.wantVisible !== false;
   }
 
   start() {
     this.active = true; this.done = false;
     this.elapsed = 0; this.cycles = 0; this.phase = ''; this.lastText = ''; this.guideK = 0;
+    this.lanterns.forEach((l) => this.group.remove(l.s)); this.lanterns = [];
     if (this.host.soundOn && this.host.soundOn()) this.sound.start(LANDSCAPES[this.id].sound);
   }
 
@@ -299,14 +459,22 @@ export class LandscapeScene {
       if (ph.name === 'fin') { this.done = true; this.active = false; this.sound.stop(); }
       this.host.onPhase && this.host.onPhase(ph.name);
     }
-    // La luz guía solo durante la respiración guiada (aparece y se va en ~3 s)
-    const want = ph.name === 'guiada' ? 1 : 0;
+    // La guía se ve desde la llegada (más tenue, con la cuenta para empezar) y a pleno en la respiración guiada
+    const want = ph.name === 'guiada' ? 1 : ph.name === 'llegada' ? 0.6 : 0;
     this.guideK += Math.sign(want - this.guideK) * Math.min(Math.abs(want - this.guideK), dt / 3);
     let size = 0.3;
-    if (ph.name === 'guiada') {
+    if (ph.name === 'llegada') {
+      // Antes de empezar: "Respira normal" y los segundos que faltan; la guía respira muy suave por sí sola
+      size = 0.15 + 0.1 * (0.5 - 0.5 * Math.cos(this.elapsed * 0.6));
+      const left = Math.ceil(ph.left);
+      const text = 'Comenzamos en ' + left;
+      if (text !== this.lastText) { this.lastText = text; this.drawWord('Comenzamos en', left); }
+      this.breathName = '';
+    } else if (ph.name === 'guiada') {
       const b = breathAt(ph.t, this.cfg.breathPattern);
       size = b.size;
-      if (b.cycle > this.cycles) { this.cycles = b.cycle; this.host.onCycle && this.host.onCycle(this.cycles); }
+      if (b.cycle > this.cycles) { this.cycles = b.cycle; this.host.onCycle && this.host.onCycle(this.cycles); this.releaseLantern(); }
+      this.breathName = b.name;
       const word = WORDS[b.name] || '';
       const count = this.cfg.breathCount === 'on' ? Math.max(1, Math.ceil(b.remaining - 1e-6)) : 0;
       const text = word + (count ? '  ' + count : '');
@@ -314,11 +482,64 @@ export class LandscapeScene {
       if (text !== this.lastText) { this.lastText = text; this.drawWord(word, count); }
     }
     const k = this.guideK;
+    this.drawBar(k, size, dt);
+    this.drawFlower(k, size);
+    this.stepLanterns(dt);
     this.glow.scale.setScalar(0.35 + 0.55 * size);
     this.glowMat.opacity = k * (0.35 + 0.4 * size);
     this.ring.scale.setScalar(0.75 + 0.5 * size);
     this.ringMat.opacity = k * 0.55; // visible también sobre cielos claros
-    this.wordMat.opacity = k * 0.9;
+    this.wordMat.opacity = Math.min(1, k * 1.5) * 0.95;
+  }
+
+  drawBar(k, size, dt) {
+    if (!this.bar.visible) return;
+    const hold = this.breathName === 'hold' || this.breathName === 'holdOut';
+    this.pulse = (this.pulse || 0) + dt;
+    const h = Math.max(0.001, this.barFillMax * size);
+    this.barFill.scale.y = h;
+    this.barFillMat.opacity = k * (0.45 + 0.55 * size); // al exhalar se vacía y se apaga
+    this.barFrameMat.opacity = k * 0.9;
+    this.barBackMat.opacity = k * 0.35;
+    this.barTip.position.set(0, this.barFill.position.y + h, 0.004);
+    this.barTip.scale.setScalar((0.2 + 0.18 * size) * (hold ? 1 + 0.12 * Math.sin(this.pulse * 5) : 1));
+    this.barTipMat.opacity = k * (0.3 + 0.6 * size);
+  }
+
+  drawFlower(k, size) {
+    if (!this.flower.visible) return;
+    // cerrada = pétalos doblados hacia el paciente (capullo); abierta = estrella de pétalos
+    this.petals.forEach((p) => { p.hinge.rotation.x = -(1 - size) * (p.layer ? 1.35 : 1.2) - 0.08; });
+    this.flower.rotation.z += 0.0008;
+    this.petalMat.opacity = k * (0.55 + 0.35 * size);
+    this.petalMat2.opacity = k * (0.6 + 0.35 * size);
+    this.flowerCore.scale.setScalar(0.08 + 0.2 * size);
+    this.flowerCoreMat.opacity = k * (0.4 + 0.6 * size);
+  }
+
+  // Un farolillo por respiración completa: sube despacio y se aleja (técnico: ~0,1 m/s, sin acercarse a la cara)
+  releaseLantern() {
+    if (this.visual === 'luz') return;
+    const T = this.T;
+    if (this.lanterns.length >= 14) { const old = this.lanterns.shift(); this.group.remove(old.s); }
+    const s = new T.Sprite(this.lanternMat.clone());
+    s.scale.setScalar(0.12);
+    const gp = this.guideGroup.position;
+    s.position.set(gp.x + (Math.random() - 0.5) * 0.3, gp.y + 0.1, gp.z);
+    this.group.add(s);
+    this.lanterns.push({ s, t: 0, vx: (Math.random() - 0.5) * 0.06, ph: Math.random() * 6 });
+  }
+
+  stepLanterns(dt) {
+    for (let i = this.lanterns.length - 1; i >= 0; i--) {
+      const l = this.lanterns[i]; l.t += dt;
+      l.s.position.x += (l.vx + 0.02 * Math.sin(l.t * 0.7 + l.ph)) * dt;
+      l.s.position.y += 0.1 * dt;
+      l.s.position.z -= 0.12 * dt;
+      const life = 90; // se ven subir y quedarse un rato en el cielo, como progreso
+      l.s.material.opacity = Math.min(1, l.t / 1.5) * Math.min(1, (life - l.t) / 8) * (0.75 + 0.25 * Math.sin(l.t * 3 + l.ph)) * this.amount;
+      if (l.t > life) { this.group.remove(l.s); this.lanterns.splice(i, 1); }
+    }
   }
 
   drawWord(word, count) {
@@ -329,8 +550,16 @@ export class LandscapeScene {
     g.shadowColor = 'rgba(40,40,60,0.55)'; g.shadowBlur = 14;
     g.fillStyle = '#fffaf0';
     g.font = '600 64px ' + FONT;
-    g.fillText(word, c.width / 2 - (count ? 30 : 0), c.height / 2);
-    if (count) { g.font = '500 54px ' + FONT; g.globalAlpha = 0.75; g.fillText(String(count), c.width / 2 + g.measureText(word).width / 2 + 40, c.height / 2 + 2); g.globalAlpha = 1; }
+    let ww = g.measureText(word).width;
+    if (ww > c.width - 150) { g.font = '600 52px ' + FONT; ww = g.measureText(word).width; }
+    const cx = c.width / 2 - (count ? 34 : 0);
+    // fondo suave detrás del texto: se lee igual sobre cielos claros u oscuros
+    g.shadowBlur = 0; g.fillStyle = 'rgba(25,30,55,0.45)';
+    const bw = ww + (count ? 130 : 60); const bx = c.width / 2 - bw / 2;
+    g.beginPath(); g.moveTo(bx + 40, 30); g.arcTo(bx + bw, 30, bx + bw, 130, 40); g.arcTo(bx + bw, 130, bx, 130, 40); g.arcTo(bx, 130, bx, 30, 40); g.arcTo(bx, 30, bx + bw, 30, 40); g.closePath(); g.fill();
+    g.shadowColor = 'rgba(40,40,60,0.55)'; g.shadowBlur = 10; g.fillStyle = '#fffaf0';
+    g.fillText(word, cx, c.height / 2);
+    if (count) { g.font = '500 54px ' + FONT; g.globalAlpha = 0.8; g.fillText(String(count), cx + ww / 2 + 44, c.height / 2 + 2); g.globalAlpha = 1; }
     this.wordTex.needsUpdate = true;
   }
 }

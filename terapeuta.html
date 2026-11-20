@@ -768,6 +768,14 @@
                     <option value="off">Apagada</option>
                   </select>
                 </div>
+                <div>
+                  <label for="cfgBreathVisual">Guía para respirar</label>
+                  <select id="cfgBreathVisual">
+                    <option value="barra" selected>Barra que se llena y se vacía</option>
+                    <option value="flor">Flor que se abre y se cierra</option>
+                    <option value="luz">Luz suave (mínima)</option>
+                  </select>
+                </div>
               </div>
               <p id="p360Note" class="cfg-note">Respira 360: la duración total es la respiración guiada + 2 min de llegada y vuelta + 20 s de cierre (no usa la «Duración máxima» de la sesión). Basado en el documento «Protocolo Respira 360» (prototipo, a revisar por el equipo).</p>
               <p class="cfg-note">Opciones de diseño, no recomendaciones clínicas. No mide alcance; termina por tiempo.</p>
@@ -992,7 +1000,7 @@
   </main>
 </div>
 
-<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.12.2 · prototipo no validado clínicamente</p>
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.12.3 · prototipo no validado clínicamente</p>
 <script type="module" src="./terapeuta.js"></script>
 <script>
 if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); }); }
