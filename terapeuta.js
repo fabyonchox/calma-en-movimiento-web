@@ -2,7 +2,7 @@ import { getSyncServerUrl, getSessionCode } from './sync-config.js';
 import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure, APPLE_LEVEL_ES, FAIR_LEVEL_ES } from './logic.js';
 import { PatientsPanel } from './pacientes.js';
 
-const APP_VERSION = '0.12.0';
+const APP_VERSION = '0.12.1';
 
 let ws = null;
 let currentRoom = getSessionCode() || 'HOSPITAL-1';
@@ -104,6 +104,7 @@ function fillForm(cfg, force = false) {
     el.value = val;
   }
   formFilled = true;
+  syncGameUI();
 }
 
 // Nombre de la actividad; en la Cosecha del Manzano incluye el nivel (y la velocidad en los niveles 2 y 3)
@@ -127,6 +128,14 @@ function describeConfig(c) {
     c.dwell + ' s por objetivo',
     c.guide === 'off' ? 'sin guía' : 'con guía' + (c.guideProgress === 'on' ? ' y progreso visible' : ''),
   ].join(' · ');
+}
+
+// Una sola línea (el texto completo se ve al dejar el cursor encima)
+function showActiveConfig(c) {
+  const el = $('cfgActive');
+  if (!el || !c) return;
+  el.textContent = 'En el visor: ' + describeConfig(c);
+  el.title = 'Configuración activa en el visor: ' + describeConfig(c);
 }
 
 function setCfgStatus(text, tone) {
@@ -305,7 +314,7 @@ function handleMessage(msg) {
       configDirty = false;
       if (msg.config) fillForm(msg.config, true);
       setCfgStatus('✔ Aplicado en el visor.', 'ok');
-      if ($('cfgActive')) $('cfgActive').textContent = 'Configuración activa en el visor: ' + describeConfig(msg.config);
+      showActiveConfig(msg.config);
       if ($('applyCfgBtn')) $('applyCfgBtn').textContent = '✔ Configuración aplicada en el visor';
       setTimeout(resetApplyButton, 2500);
       if (msg.config) {
@@ -553,7 +562,7 @@ function renderMetrics(m) {
 
   // Primera vez que llega la configuración real del visor: el formulario parte con lo que de verdad está activo.
   if (cm.config && !formFilled) fillForm(cm.config);
-  if (cm.config && $('cfgActive')) $('cfgActive').textContent = 'Configuración activa en el visor: ' + describeConfig(cm.config);
+  if (cm.config) showActiveConfig(cm.config);
 
   // Si el visor ya estaba fuera de VR, se redibuja el cierre con los datos recién llegados.
   if (currentPhase === 'idle' && lastState) renderMirrorState(lastState);
@@ -675,6 +684,52 @@ Object.values(CFG_FIELDS).forEach((id) => {
   const el = $(id);
   if (el) el.addEventListener('change', markDirty);
 });
+
+/* ---------- Pestañas y tarjetas de juego ---------- */
+
+// Solo la tarjeta del juego elegido muestra sus casillas. Las casillas que comparten varios juegos (meta, tiempo, tamaño)
+// pasan a la tarjeta elegida, así cada juego muestra exactamente sus parámetros.
+function syncGameUI() {
+  const sel = $('cfgMode');
+  if (!sel) return;
+  const mode = sel.value;
+  document.querySelectorAll('.game-card').forEach((card) => {
+    const on = card.dataset.game === mode;
+    card.classList.toggle('on', on);
+    card.querySelector('.gc-head').setAttribute('aria-checked', on ? 'true' : 'false');
+    card.querySelector('.gc-body').hidden = !on;
+    if (!on) return;
+    card.querySelectorAll('[data-take]').forEach((slot) => {
+      slot.dataset.take.split(' ').filter(Boolean).forEach((name) => {
+        const f = $('fld-' + name);
+        if (f && f.parentNode !== slot) slot.appendChild(f);
+      });
+    });
+  });
+}
+document.querySelectorAll('.game-card .gc-head').forEach((b) => {
+  b.addEventListener('click', () => {
+    $('cfgMode').value = b.closest('.game-card').dataset.game;
+    $('cfgMode').dispatchEvent(new Event('change')); // marca "cambios sin enviar"
+    syncGameUI();
+  });
+});
+$('cfgMode').addEventListener('change', syncGameUI);
+syncGameUI();
+
+function showTab(name, save = true) {
+  if (!document.getElementById('tab-' + name)) name = 'config';
+  document.querySelectorAll('.tab').forEach((t) => t.setAttribute('aria-selected', t.dataset.tab === name ? 'true' : 'false'));
+  document.querySelectorAll('.tab-panel').forEach((p) => { p.hidden = p.id !== 'tab-' + name; });
+  if (save) { try { localStorage.setItem('calma_tab', name); } catch (e) { /* sin almacenamiento */ } }
+  window.scrollTo({ top: 0 });
+}
+document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => showTab(t.dataset.tab)));
+{
+  let saved = 'config';
+  try { saved = localStorage.getItem('calma_tab') || 'config'; } catch (e) { /* ok */ }
+  showTab(saved, false);
+}
 
 // Cambiar código de sala
 $('changeRoomBtn').onclick = () => {
@@ -827,6 +882,7 @@ function updateRoomBanner() {
   else if (isHeadsetOnline) { st.textContent = 'Visor conectado 🟢'; st.dataset.on = '1'; }
   else { st.textContent = 'Esperando visor… ⏳'; st.dataset.on = '0'; }
   document.querySelectorAll('.rb-pill').forEach((b) => b.setAttribute('aria-pressed', b.dataset.room === currentRoom ? 'true' : 'false'));
+  if ($('liveDot')) $('liveDot').hidden = !isHeadsetOnline;
 
   // Versión del visor: si es distinta de la de esta pantalla, el visor tiene la página vieja abierta y hay que recargarla.
   const ver = $('rbVer');
