@@ -171,12 +171,18 @@ export function starPose(size, t) {
 /* ---------------- Respira 360: sesión en un paisaje 360° (ver documento "Protocolo Respira 360") ---------------- */
 
 export const LANDSCAPES = {
+  // Cielos 360° (Poly Haven, CC0; versión "puresky": solo cielo, sin suelo): calma y pocos distractores
+  amanecer: { label: 'Amanecer sereno', sound: 'olas' },
+  nubes: { label: 'Cielo con nubes', sound: 'viento' },
+  atardecer: { label: 'Tarde despejada', sound: 'olas' },
+  noche: { label: 'Noche estrellada', sound: 'noche' },
+  // Paisajes (por ahora pintados por el juego, hasta tener sus fotos)
   playa: { label: 'Playa al amanecer', sound: 'olas' },
   cascada: { label: 'Río y cascada', sound: 'agua' },
   pradera: { label: 'Pradera', sound: 'pradera' },
   bosque: { label: 'Bosque', sound: 'bosque' },
 };
-export const DEFAULT_LANDSCAPE = 'playa';
+export const DEFAULT_LANDSCAPE = 'amanecer';
 export const GUIDED_MINUTES = [3, 5, 8, 10];
 // Tiempos de llegada, vuelta a la calma y cierre (práctica habitual, no dato de estudio; a confirmar por el equipo)
 export const SETTLE_SECS = 60;

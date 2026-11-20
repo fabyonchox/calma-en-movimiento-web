@@ -108,7 +108,7 @@ function fillForm(cfg, force = false) {
   if (typeof updateBreathFields === 'function') updateBreathFields();
 }
 
-const LAND_ES = { playa: 'playa al amanecer', cascada: 'río y cascada', pradera: 'pradera', bosque: 'bosque' };
+const LAND_ES = { amanecer: 'amanecer sereno', nubes: 'cielo con nubes', atardecer: 'tarde despejada', noche: 'noche estrellada', playa: 'playa al amanecer', cascada: 'río y cascada', pradera: 'pradera', bosque: 'bosque' };
 function describeConfig(c) {
   if (!c) return '';
   if (c.gameMode === 'breath' && c.breathContent === 'paisaje') {

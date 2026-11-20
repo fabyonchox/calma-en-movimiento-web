@@ -34,7 +34,7 @@ export const DEFAULTS = {
   neckRange: 'suave',
   breathContent: 'ambos', // ambos | estrella | pajaros | paisaje (Respira 360)
   // Respira 360 (ver documento "Protocolo Respira 360")
-  breathLandscape: 'playa', // playa | cascada | pradera | bosque
+  breathLandscape: 'amanecer', // amanecer | nubes | atardecer | noche | playa | cascada | pradera | bosque
   breathGuidedMin: 5, // minutos de respiración guiada: 3 | 5 | 8 | 10
   breathSettle: 'on', // llegada y vuelta a la calma (1 min cada una): 'on' | 'off'
   breathCount: 'off', // cuenta de segundos visible: 'on' | 'off'
@@ -73,7 +73,7 @@ export function normalizeConfig(raw = {}) {
   c.breathPattern = ['4-6', '5-5', 'inicial', 'suspiro', '4-2-6', 'caja'].includes(c.breathPattern) ? c.breathPattern : DEFAULTS.breathPattern;
   c.neckRange = ['suave', 'medio', 'amplio'].includes(c.neckRange) ? c.neckRange : DEFAULTS.neckRange;
   c.breathContent = ['ambos', 'estrella', 'pajaros', 'paisaje'].includes(c.breathContent) ? c.breathContent : DEFAULTS.breathContent;
-  c.breathLandscape = ['playa', 'cascada', 'pradera', 'bosque'].includes(c.breathLandscape) ? c.breathLandscape : DEFAULTS.breathLandscape;
+  c.breathLandscape = ['amanecer', 'nubes', 'atardecer', 'noche', 'playa', 'cascada', 'pradera', 'bosque'].includes(c.breathLandscape) ? c.breathLandscape : DEFAULTS.breathLandscape;
   c.breathGuidedMin = [3, 5, 8, 10].includes(Number(c.breathGuidedMin)) ? Number(c.breathGuidedMin) : DEFAULTS.breathGuidedMin;
   c.breathSettle = c.breathSettle === 'off' || c.breathSettle === false ? 'off' : 'on';
   c.breathCount = c.breathCount === 'on' || c.breathCount === true ? 'on' : 'off';

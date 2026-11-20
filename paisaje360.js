@@ -23,7 +23,7 @@ function rng(seed) {
 }
 
 // Giro de cada foto para que lo más bonito quede al frente (grados; se ajusta al ver la foto en el Quest)
-const YAW = { playa: 0, cascada: 0, pradera: 0, bosque: 0 };
+const YAW = { amanecer: 0, nubes: 0, atardecer: 0, noche: 140, playa: 0, cascada: 0, pradera: 0, bosque: 0 };
 
 /* ---------- Paisajes pintados (reemplazo mientras no estén las fotos) ---------- */
 function paintLandscape(id) {
@@ -133,6 +133,7 @@ export class PlaceSound {
     const lfo = c.createOscillator(); const lg = c.createGain();
     if (kind === 'olas') { lp.frequency.value = 1100; g.gain.value = 0.09; lfo.frequency.value = 1 / 10; lg.gain.value = 0.07; } // olas cada ~10 s
     else if (kind === 'agua') { lp.frequency.value = 2600; g.gain.value = 0.07; lfo.frequency.value = 0.13; lg.gain.value = 0.012; } // río constante
+    else if (kind === 'noche') { lp.frequency.value = 900; g.gain.value = 0.03; lfo.frequency.value = 0.05; lg.gain.value = 0.015; } // brisa nocturna suave
     else { lp.frequency.value = 1300; g.gain.value = 0.045; lfo.frequency.value = 0.06; lg.gain.value = 0.025; } // brisa
     lfo.connect(lg).connect(g.gain);
     src.connect(hp).connect(lp).connect(g).connect(this.master);
@@ -145,6 +146,25 @@ export class PlaceSound {
         this.timer = setTimeout(tick, (kind === 'bosque' ? 5000 : 8000) + Math.random() * 9000);
       };
       this.timer = setTimeout(tick, 3000);
+    }
+    if (kind === 'noche') {
+      const tick = () => {
+        if (!this.on) return;
+        try { this.cricket(); } catch (e) { /* ok */ }
+        this.timer = setTimeout(tick, 900 + Math.random() * 1400);
+      };
+      this.timer = setTimeout(tick, 2000);
+    }
+  }
+  // Grillo lejano: 3–4 pulsos cortos y agudos, muy bajito
+  cricket() {
+    const c = this.c; const t = c.currentTime + 0.03; const f = 4300 + Math.random() * 500;
+    const n = 3 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < n; i++) {
+      const o = c.createOscillator(); const g = c.createGain(); const ti = t + i * 0.055;
+      o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, ti); g.gain.exponentialRampToValueAtTime(0.004, ti + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, ti + 0.035);
+      o.connect(g).connect(this.master); o.start(ti); o.stop(ti + 0.05);
     }
   }
   chirp() {
@@ -195,10 +215,10 @@ export class LandscapeScene {
       grd.addColorStop(0, 'rgba(255,255,255,0.95)'); grd.addColorStop(0.3, 'rgba(255,250,235,0.55)'); grd.addColorStop(1, 'rgba(255,245,225,0)');
       g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
     }
-    this.glowMat = new T.SpriteMaterial({ map: glow ? new T.CanvasTexture(glow) : null, color: 0xfff6e2, transparent: true, depthWrite: false, fog: false, opacity: 0 });
+    this.glowMat = new T.SpriteMaterial({ map: glow ? new T.CanvasTexture(glow) : null, color: 0xffd88a, transparent: true, depthWrite: false, fog: false, opacity: 0 });
     this.glow = new T.Sprite(this.glowMat);
     this.guideGroup.add(this.glow);
-    this.ringMat = new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false, fog: false });
+    this.ringMat = new T.MeshBasicMaterial({ color: 0xffe2a0, transparent: true, opacity: 0, depthWrite: false, fog: false });
     this.ring = new T.Mesh(new T.RingGeometry(0.29, 0.3, 96), this.ringMat);
     this.guideGroup.add(this.ring);
     // Palabra (y cuenta) bajo la luz
@@ -297,7 +317,7 @@ export class LandscapeScene {
     this.glow.scale.setScalar(0.35 + 0.55 * size);
     this.glowMat.opacity = k * (0.35 + 0.4 * size);
     this.ring.scale.setScalar(0.75 + 0.5 * size);
-    this.ringMat.opacity = k * 0.35;
+    this.ringMat.opacity = k * 0.55; // visible también sobre cielos claros
     this.wordMat.opacity = k * 0.9;
   }
 
