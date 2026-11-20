@@ -29,6 +29,8 @@ export const DEFAULTS = {
   limitReach: true,
   appleLevel: 1, // Cosecha del Manzano: 1 manzana fija | 2 manzana que se mueve | 3 manzana que vibra y cae (lento)
   appleSpeed: 'slow', // velocidad de los niveles 2 y 3: 'slow' | 'medium'
+  reachZone: 'mixto', // zona de trabajo (Manzano niveles 1-2 y Jardín de Luces): 'mixto' | 'bajo' | 'noventa' | 'sobre'
+  reachMax: 'off', // trabajar en el límite del rango medido (flexión máxima): 'on' | 'off'
   appleArc: 'amplio', // nivel 3: hasta dónde a los lados aparecen las manzanas: 'frente' (35°) | 'amplio' (60°) | 'completo' (85°)
   handLook: 'skin2', // aspecto de las manos en el visor: 'skin1' clara | 'skin2' media | 'skin3' oscura | 'glow' luminosa
   guide: 'on', // guía (luz con carita): 'on' | 'off'
@@ -76,6 +78,8 @@ export function normalizeConfig(raw = {}) {
   c.appleLevel = [1, 2, 3].includes(Number(c.appleLevel)) ? Number(c.appleLevel) : DEFAULTS.appleLevel;
   c.appleSpeed = ['slow', 'medium'].includes(c.appleSpeed) ? c.appleSpeed : DEFAULTS.appleSpeed;
   c.appleArc = ['frente', 'amplio', 'completo'].includes(c.appleArc) ? c.appleArc : DEFAULTS.appleArc;
+  c.reachZone = ['mixto', 'bajo', 'noventa', 'sobre'].includes(c.reachZone) ? c.reachZone : DEFAULTS.reachZone;
+  c.reachMax = c.reachMax === 'on' || c.reachMax === true ? 'on' : 'off';
   c.handLook = ['skin1', 'skin2', 'skin3', 'glow'].includes(c.handLook) ? c.handLook : DEFAULTS.handLook;
   c.audio3d = c.audio3d === 'off' || c.audio3d === false ? 'off' : 'on';
   c.limitReach = !!c.limitReach;
@@ -108,7 +112,7 @@ export function normalizeConfig(raw = {}) {
 }
 
 // Campos que la tablet del evaluador puede cambiar en el visor. Cualquier otro campo se ignora.
-export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'audio3d', 'handLook', 'appleLevel', 'appleSpeed', 'appleArc', 'fairLevel', 'guide', 'guideProgress', 'fairDist', 'breathPattern', 'neckRange', 'breathContent', 'breathLandscape', 'breathGuidedMin', 'breathSettle', 'breathCount', 'breathVoice', 'breathVisual'];
+export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'audio3d', 'handLook', 'appleLevel', 'appleSpeed', 'appleArc', 'reachZone', 'reachMax', 'fairLevel', 'guide', 'guideProgress', 'fairDist', 'breathPattern', 'neckRange', 'breathContent', 'breathLandscape', 'breathGuidedMin', 'breathSettle', 'breathCount', 'breathVoice', 'breathVisual'];
 
 // Mezcla la configuración actual del visor con la que manda la tablet y la normaliza.
 export function mergeConfig(current, incoming) {
@@ -258,10 +262,75 @@ export function effectiveDistances(cfg, reach) {
   return { minD, maxD };
 }
 
+/* ---------- Zonas de trabajo por ángulo de flexión de hombro ---------- */
+// El terapeuta elige dónde aparecen los objetivos según el ángulo ESTIMADO de flexión de hombro (0° = brazo colgando,
+// 90° = brazo horizontal al frente, 180° = brazo vertical). Modelo simple: hombro 25 cm bajo los ojos y largo del brazo
+// ≈ alcance frontal calibrado. Es una aproximación para ubicar objetivos, no una medición goniométrica.
+// Rangos en grados (técnicos, a confirmar por el equipo):
+export const REACH_ZONES = {
+  bajo: { label: 'Bajo 90° (alcances bajos)', deg: [55, 78] },
+  noventa: { label: 'A 90° (altura del hombro)', deg: [82, 98] },
+  sobre: { label: 'Sobre 90° (alcances altos)', deg: [105, 140] },
+};
+export const MAX_RANGE_BAND = 12; // con «rango máximo»: los últimos 12° del máximo medido (nunca más allá)
+
+// Banda de ángulos que se usará, según la zona y, si corresponde, el máximo de flexión medido en la calibración.
+// ctx: { eyeH, armL, flexAng } (flexAng = ángulo estimado de la flexión máxima medida; puede faltar)
+export function zoneBand(cfg, ctx = {}) {
+  const z = REACH_ZONES[cfg.reachZone];
+  if (!z) return null;
+  let [lo, hi] = z.deg;
+  if (ctx.flexAng > 0) {
+    const top = Math.min(170, ctx.flexAng);
+    // «Rango máximo» (zona sobre 90°): los últimos grados de lo que la persona logró en la calibración
+    if (cfg.reachMax === 'on' && cfg.reachZone === 'sobre') { hi = top; lo = Math.max(90, top - MAX_RANGE_BAND); }
+    // Nunca más arriba del máximo medido
+    hi = Math.min(hi, top); lo = Math.min(lo, hi);
+  }
+  return [lo, hi];
+}
+
+// Punto (adelante, altura) para un ángulo de flexión dado
+export function armPoint(deg, ctx) {
+  const eyeH = ctx.eyeH > 0.5 ? ctx.eyeH : 1.15;
+  const L = Math.max(0.3, Math.min(0.85, ctx.armL || 0.6));
+  const a = (deg * Math.PI) / 180;
+  return { fwd: L * Math.sin(a), y: eyeH - SHOULDER_BELOW_EYES - L * Math.cos(a) };
+}
+
 // Coordenadas locales: x lateral (+ derecha), y altura sobre el suelo, z hacia delante (negativa).
 // El origen horizontal es la cabeza del usuario al calibrar.
 // r = distancia horizontal cabeza-objetivo (el "alcance" de la guía).
 export function pickTarget(cfg, dist, prev = null, rng = Math.random) {
+  const band = zoneBand(cfg, cfg.zoneCtx || { eyeH: cfg.eyeH });
+  if (band) return pickZoneTarget(cfg, dist, band, prev, rng);
+  return pickTargetMixed(cfg, dist, prev, rng);
+}
+
+// Objetivo dentro de una zona de trabajo: se elige un ángulo de la banda, se calcula altura y distancia,
+// y se respeta el tope de alcance cómodo (nunca más lejos que dist.maxD) y el lado elegido.
+function pickZoneTarget(cfg, dist, band, prev, rng) {
+  const ctx = { eyeH: cfg.eyeH, ...(cfg.zoneCtx || {}) };
+  const cap = Math.max(0.25, (dist && dist.maxD) || 0.75);
+  let best = null;
+  for (let i = 0; i < 16; i++) {
+    const deg = band[0] + rng() * (band[1] - band[0]);
+    const pt = armPoint(deg, ctx);
+    const r = Math.min(cap, Math.max(0.22, pt.fwd));
+    const maxLat = Math.min(0.35, r * 0.55);
+    let lo = -maxLat; let hi = maxLat;
+    if (cfg.side === 'right') lo = -0.10 * maxLat; else if (cfg.side === 'left') hi = 0.10 * maxLat;
+    const l = lo + rng() * (hi - lo);
+    const f = Math.sqrt(Math.max(0, r * r - l * l));
+    const y = Math.max(0.45, Math.min(2.15, pt.y));
+    const pos = { x: l, y, z: -Math.max(0.05, f) };
+    best = { pos, reach: Math.hypot(l, f), deg };
+    if (!prev || distance(pos, prev) >= 0.12) break;
+  }
+  return best;
+}
+
+function pickTargetMixed(cfg, dist, prev = null, rng = Math.random) {
   const eyeH = typeof cfg.eyeH === 'number' && cfg.eyeH > 0.5 ? cfg.eyeH : 1.15;
   // Altura clínica ergonómica frontal: entre mitad del pecho (eyeH - 0.22) y vista (eyeH + 0.10)
   const targetMinH = Math.max(0.75, eyeH - 0.22);
@@ -321,6 +390,12 @@ export function targetBounds(cfg, dist) {
   const cap = Math.max(0.25, (dist && dist.maxD) || 0.75);
   const floor = cap < 0.42 ? cap * 0.8 : 0.42;
   const minD = Math.min(Math.max(floor, (dist && dist.minD) || floor), cap);
+  const band = zoneBand(cfg, cfg.zoneCtx || { eyeH });
+  if (band) { // con zona de trabajo, la manzana que se mueve (nivel 2) se queda dentro de esas alturas
+    const ctx = { eyeH, ...(cfg.zoneCtx || {}) };
+    const a = armPoint(band[0], ctx).y; const c = armPoint(band[1], ctx).y;
+    return { minD: Math.min(minD, cap * 0.6), maxD: cap, minH: Math.max(0.45, Math.min(a, c)), maxH: Math.min(2.15, Math.max(a, c)) };
+  }
   return { minD, maxD: cap, minH: Math.max(0.75, eyeH - 0.22), maxH: Math.min(1.70, eyeH + 0.10) };
 }
 

@@ -857,7 +857,24 @@
                 <option value="12">12 minutos</option>
               </select>
             </div>
+            <div>
+              <label for="cfgReachZone">Zona de trabajo (flexión de hombro)</label>
+              <select id="cfgReachZone">
+                <option value="mixto" selected>Mixta (como hasta ahora)</option>
+                <option value="bajo">Bajo 90° · alcances bajos</option>
+                <option value="noventa">A 90° · altura del hombro</option>
+                <option value="sobre">Sobre 90° · alcances altos</option>
+              </select>
+            </div>
+            <div>
+              <label for="cfgReachMax">Rango máximo</label>
+              <select id="cfgReachMax">
+                <option value="off" selected>No</option>
+                <option value="on">Sí: en el límite de lo medido (sobre 90°)</option>
+              </select>
+            </div>
           </div>
+          <p id="zoneNote" class="pc-muted" style="margin:6px 0 0; font-size:0.8rem;">Zona de trabajo: Cosecha del Manzano (niveles 1 y 2) y Jardín de Luces. Los ángulos son estimados con el alcance calibrado (no reemplazan la goniometría). «Rango máximo» usa la <b>Flexión máxima de hombro</b> medida en la calibración: ubica los objetivos en los últimos 12° de lo logrado, nunca más allá.</p>
         </div>
 
         <!-- Experiencia en el visor: se usa poco, queda plegado -->
@@ -1008,7 +1025,7 @@
   </main>
 </div>
 
-<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.12.4 · prototipo no validado clínicamente</p>
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.12.5 · prototipo no validado clínicamente</p>
 <script type="module" src="./terapeuta.js"></script>
 <script>
 if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); }); }

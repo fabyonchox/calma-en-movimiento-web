@@ -2,7 +2,7 @@ import { getSyncServerUrl, getSessionCode } from './sync-config.js';
 import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure, APPLE_LEVEL_ES, FAIR_LEVEL_ES } from './logic.js';
 import { PatientsPanel } from './pacientes.js';
 
-const APP_VERSION = '0.12.4';
+const APP_VERSION = '0.12.5';
 
 let ws = null;
 let currentRoom = getSessionCode() || 'HOSPITAL-1';
@@ -60,7 +60,7 @@ const MODE_ES = { apples: 'Cosecha del Manzano', lights: 'Jardín de Luces', fai
 const CFG_FIELDS = {
   gameMode: 'cfgMode', zone: 'cfgZone', side: 'cfgSide', position: 'cfgPos',
   minutes: 'cfgMin', reps: 'cfgReps', dwell: 'cfgDwell', size: 'cfgSize', feedback: 'cfgFeedback',
-  guide: 'cfgGuide', guideProgress: 'cfgGuideProgress', fairDist: 'cfgFairDist', audio3d: 'cfgAudio3d', handLook: 'cfgHandLook', appleLevel: 'cfgAppleLevel', appleSpeed: 'cfgAppleSpeed', appleArc: 'cfgAppleArc', fairLevel: 'cfgFairLevel',
+  guide: 'cfgGuide', guideProgress: 'cfgGuideProgress', fairDist: 'cfgFairDist', audio3d: 'cfgAudio3d', handLook: 'cfgHandLook', appleLevel: 'cfgAppleLevel', appleSpeed: 'cfgAppleSpeed', appleArc: 'cfgAppleArc', reachZone: 'cfgReachZone', reachMax: 'cfgReachMax', fairLevel: 'cfgFairLevel',
   breathPattern: 'cfgBreathPattern', neckRange: 'cfgNeckRange', breathContent: 'cfgBreathContent',
   breathLandscape: 'cfgBreathLandscape', breathGuidedMin: 'cfgBreathGuidedMin', breathSettle: 'cfgBreathSettle', breathCount: 'cfgBreathCount', breathVoice: 'cfgBreathVoice', breathVisual: 'cfgBreathVisual',
 };
@@ -135,6 +135,7 @@ function describeConfig(c) {
     c.reps + ' repeticiones',
     c.dwell + ' s por objetivo',
     c.guide === 'off' ? 'sin guía' : 'con guía' + (c.guideProgress === 'on' ? ' y progreso visible' : ''),
+    ...(c.reachZone && c.reachZone !== 'mixto' ? ['zona ' + ({ bajo: 'bajo 90°', noventa: 'a 90°', sobre: 'sobre 90°' }[c.reachZone]) + (c.reachMax === 'on' ? ' (rango máximo)' : '')] : []),
   ].join(' · ');
 }
 

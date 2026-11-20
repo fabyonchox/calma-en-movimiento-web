@@ -2311,7 +2311,15 @@ function updateFallShadow(p) {
   fallShadow.material.opacity = 0.25 + 0.45 * k;
 }
 
+// Datos de la calibración para ubicar objetivos por zona de flexión de hombro (largo del brazo ≈ alcance frontal)
+function zoneContext() {
+  const fx = S.measures && S.measures.flexion;
+  const L = typeof S.reach === 'number' && S.reach > 0 ? S.reach : (S.dist && S.dist.maxD) || 0.6;
+  return { eyeH: S.eyeH, armL: L, flexAng: fx && fx.ang ? fx.ang : 0 };
+}
+
 function spawnTarget() {
+  S.cfg.zoneCtx = zoneContext();
   const t = pickTarget(S.cfg, S.dist, S.prevPos);
   S.target = t;
   S.prevPos = t.pos;
@@ -2348,7 +2356,7 @@ function spawnTarget() {
     showFallShadow(lvl === 3);
     if (lvl !== 3) showSideBranch(null);
     updateAppleTwig(t.pos.y);
-    if (lvl === 2) targetAppleGroup.userData.twig.visible = false; // flota: ya no cuelga de la rama
+    // nivel 2: sigue colgando de su ramita mientras se mueve (no flota)
     return;
   }
 
@@ -2632,6 +2640,7 @@ function update(dt, now) {
         T.pos.x = st.pos.x; T.pos.y = st.pos.y; T.pos.z = st.pos.z;
         if (st.arrived) T.goal = moveWaypoint(S.cfg, S.dist, T.start);
         targetAppleGroup.position.set(T.pos.x, T.pos.y + Math.sin(now * 0.003) * 0.005, T.pos.z);
+        updateAppleTwig(T.pos.y); // la ramita se acorta o alarga: la manzana siempre cuelga del árbol
         grabR = 0.105;
       } else if (lvl === 3 && T.fall) {
         const F = T.fall;
@@ -2905,7 +2914,7 @@ function loop() {
 
 initForm();
 
-export const APP_VERSION = '0.12.4';
+export const APP_VERSION = '0.12.5';
 export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; }, get breathScene() { return breathScene; }, get spaceScene() { return spaceScene; }, get gardenEnv() { return gardenEnv; }, get spaceK() { return spaceK; }, get landscapeScene() { return landscapeScene; }, get paisK() { return paisK; }, startPlay,
   // Vista previa del viaje por el espacio (k: 0..1) y del atardecer/noche (d: 0..2)
   previewSpace(k, d = 2, secs = 2) { if (!spaceScene) spaceScene = new SpaceScene(THREE, anchor); spaceK = k; spaceScene.setAmount(k); setGardenFade(1 - k); for (let i = 0; i < 60; i++) { duskTo(d, 0.2); spaceScene.step(secs / 60, 0.5); } } };
