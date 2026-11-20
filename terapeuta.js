@@ -2,7 +2,7 @@ import { getSyncServerUrl, getSessionCode } from './sync-config.js';
 import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure, APPLE_LEVEL_ES, FAIR_LEVEL_ES } from './logic.js';
 import { PatientsPanel } from './pacientes.js';
 
-const APP_VERSION = '0.12.1';
+const APP_VERSION = '0.12.2';
 
 let ws = null;
 let currentRoom = getSessionCode() || 'HOSPITAL-1';
@@ -62,6 +62,7 @@ const CFG_FIELDS = {
   minutes: 'cfgMin', reps: 'cfgReps', dwell: 'cfgDwell', size: 'cfgSize', feedback: 'cfgFeedback',
   guide: 'cfgGuide', guideProgress: 'cfgGuideProgress', fairDist: 'cfgFairDist', audio3d: 'cfgAudio3d', handLook: 'cfgHandLook', appleLevel: 'cfgAppleLevel', appleSpeed: 'cfgAppleSpeed', fairLevel: 'cfgFairLevel',
   breathPattern: 'cfgBreathPattern', neckRange: 'cfgNeckRange', breathContent: 'cfgBreathContent',
+  breathLandscape: 'cfgBreathLandscape', breathGuidedMin: 'cfgBreathGuidedMin', breathSettle: 'cfgBreathSettle', breathCount: 'cfgBreathCount', breathVoice: 'cfgBreathVoice',
 };
 
 // Las zonas salen de la misma lista que usa el visor (así lo que se elige aquí es lo que se registra allá).
@@ -82,7 +83,7 @@ function readConfigFromForm() {
   for (const [key, id] of Object.entries(CFG_FIELDS)) {
     const el = $(id);
     if (!el) continue;
-    cfg[key] = ['minutes', 'reps', 'dwell'].includes(key) ? Number(el.value) : el.value;
+    cfg[key] = ['minutes', 'reps', 'dwell', 'breathGuidedMin'].includes(key) ? Number(el.value) : el.value;
   }
   return cfg;
 }
@@ -105,7 +106,10 @@ function fillForm(cfg, force = false) {
   }
   formFilled = true;
   syncGameUI();
+  if (typeof updateBreathFields === 'function') updateBreathFields();
 }
+
+const LAND_ES = { amanecer: 'amanecer sereno', nubes: 'cielo con nubes', atardecer: 'tarde despejada', noche: 'noche estrellada', playa: 'playa al amanecer', cascada: 'río y cascada', pradera: 'pradera', bosque: 'bosque' };
 
 // Nombre de la actividad; en la Cosecha del Manzano incluye el nivel (y la velocidad en los niveles 2 y 3)
 function modeLabel(c) {
@@ -118,6 +122,10 @@ function modeLabel(c) {
 
 function describeConfig(c) {
   if (!c) return '';
+  if (c.gameMode === 'breath' && c.breathContent === 'paisaje') {
+    return ['Respira 360', LAND_ES[c.breathLandscape] || c.breathLandscape, 'ritmo ' + c.breathPattern, (c.breathGuidedMin || 5) + ' min guiados',
+      c.breathSettle === 'off' ? 'sin llegada ni vuelta' : 'con llegada y vuelta a la calma', c.guide === 'off' ? 'sin guía' : 'con voz del guía'].join(' · ');
+  }
   return [
     modeLabel(c),
     c.zone,
@@ -531,17 +539,19 @@ function renderMetrics(m) {
   const hits = isNum(cm.hits) ? cm.hits : 0;
   const breath = !!(cm.config && cm.config.gameMode === 'breath');
   // Respira no tiene meta de repeticiones: el progreso es el tiempo; se muestran respiraciones y pajaritos.
-  const totalSec = isNum(cm.minutes) && cm.minutes > 0 ? cm.minutes * 60 : 0;
+  const p360 = breath && cm.config.breathContent === 'paisaje';
+  const totalSec = p360 ? (Number(cm.config.breathGuidedMin) || 5) * 60 + (cm.config.breathSettle === 'off' ? 0 : 120) + 20
+    : isNum(cm.minutes) && cm.minutes > 0 ? cm.minutes * 60 : 0;
   const pct = breath ? (totalSec ? Math.min(100, Math.round(((cm.activeSec || 0) / totalSec) * 100)) : 0) : progressPercent(hits, reps);
 
   if ($('progressPercent')) {
     $('progressPercent').textContent = breath
-      ? `${pct}% del tiempo · ${cm.spawned || 0} respiraciones · ${hits} pajaritos`
+      ? (p360 ? `${pct}% del tiempo · ${cm.spawned || 0} respiraciones guiadas` : `${pct}% del tiempo · ${cm.spawned || 0} respiraciones · ${hits} pajaritos`)
       : `${pct}% (${hits} / ${reps})`;
   }
   if ($('progressBarFill')) $('progressBarFill').style.width = pct + '%';
 
-  $('chipHits').textContent = breath ? `${hits} pajaritos` : `${hits} / ${reps}`;
+  $('chipHits').textContent = p360 ? `${cm.spawned || 0} resp.` : breath ? `${hits} pajaritos` : `${hits} / ${reps}`;
   const limit = isNum(cm.minutes) && cm.minutes > 0 ? ' / ' + formatTime(cm.minutes * 60) : '';
   $('chipTime').textContent = formatTime(cm.activeSec || 0) + limit;
   $('chipMaxReach').textContent = `${(cm.maxReach || 0).toFixed(2)} m`;
@@ -922,3 +932,14 @@ document.querySelectorAll('.rb-pill').forEach((b) => {
 renderMetrics({});
 updateRoomBanner();
 connect();
+
+// Respira 360: mostrar sus opciones solo cuando corresponde, y advertir los ritmos que retienen el aire
+function updateBreathFields() {
+  const p360 = $('cfgBreathContent') && $('cfgBreathContent').value === 'paisaje';
+  if ($('p360Fields')) $('p360Fields').style.display = p360 ? '' : 'none';
+  if ($('p360Note')) $('p360Note').style.display = p360 ? '' : 'none';
+  const holds = $('cfgBreathPattern') && ['4-2-6', 'caja'].includes($('cfgBreathPattern').value);
+  if ($('holdWarn')) $('holdWarn').style.display = holds ? '' : 'none';
+}
+['cfgBreathContent', 'cfgBreathPattern'].forEach((id) => { if ($(id)) $(id).addEventListener('change', updateBreathFields); });
+updateBreathFields();

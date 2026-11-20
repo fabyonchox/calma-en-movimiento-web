@@ -695,16 +695,20 @@
                     <option value="ambos" selected>Estrella y luego pajaritos</option>
                     <option value="estrella">Solo la estrella</option>
                     <option value="pajaros">Solo los pajaritos</option>
+                    <option value="paisaje">Respira 360: paisaje y respiración guiada</option>
                   </select>
                 </div>
                 <div>
                   <label for="cfgBreathPattern">Ritmo de la estrella</label>
                   <select id="cfgBreathPattern">
-                    <option value="4-6" selected>Inhalar 4 s · exhalar 6 s</option>
-                    <option value="5-5">Inhalar 5 s · exhalar 5 s</option>
-                    <option value="4-2-6">Inhalar 4 · sostener 2 · exhalar 6</option>
-                    <option value="caja">Caja 4 · 4 · 4 · 4</option>
+                    <option value="4-6" selected>Inhalar 4 s · exhalar 6 s (6/min, por defecto)</option>
+                    <option value="5-5">Inhalar 5 s · exhalar 5 s (6/min)</option>
+                    <option value="inicial">Inicial: inhalar 3 s · exhalar 4 s</option>
+                    <option value="suspiro">Suspiro cíclico: inhalar 2 + 1 s · exhalar 6 s</option>
+                    <option value="4-2-6">Avanzado ⚠ Inhalar 4 · sostener 2 · exhalar 6</option>
+                    <option value="caja">Avanzado ⚠ Caja 4 · 4 · 4 · 4</option>
                   </select>
+                  <p id="holdWarn" class="pc-muted" style="display:none; margin:6px 0 0; font-size:0.8rem; color:var(--warn);">⚠ Este ritmo retiene el aire. Puede no ser adecuado en pacientes cardíacos o respiratorios: úsalo solo si el equipo médico lo autorizó.</p>
                 </div>
                 <div>
                   <label for="cfgNeckRange">Giro de cabeza (pajaritos)</label>
@@ -715,6 +719,57 @@
                   </select>
                 </div>
               </div>
+              <div id="p360Fields" class="gc-fields">
+                <div>
+                  <label for="cfgBreathLandscape">Paisaje</label>
+                  <select id="cfgBreathLandscape">
+                    <optgroup label="Cielos (fotos 360°)">
+                      <option value="amanecer" selected>Amanecer sereno</option>
+                      <option value="nubes">Cielo con nubes</option>
+                      <option value="atardecer">Tarde despejada</option>
+                      <option value="noche">Noche estrellada</option>
+                    </optgroup>
+                    <optgroup label="Paisajes (provisorios, pintados)">
+                      <option value="playa">Playa al amanecer</option>
+                      <option value="cascada">Río y cascada</option>
+                      <option value="pradera">Pradera</option>
+                      <option value="bosque">Bosque</option>
+                    </optgroup>
+                  </select>
+                </div>
+                <div>
+                  <label for="cfgBreathGuidedMin">Respiración guiada</label>
+                  <select id="cfgBreathGuidedMin">
+                    <option value="3">3 minutos</option>
+                    <option value="5" selected>5 minutos</option>
+                    <option value="8">8 minutos</option>
+                    <option value="10">10 minutos</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="cfgBreathSettle">Llegada y vuelta a la calma</label>
+                  <select id="cfgBreathSettle">
+                    <option value="on" selected>Sí (1 min cada una)</option>
+                    <option value="off">No</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="cfgBreathCount">Cuenta de segundos visible</label>
+                  <select id="cfgBreathCount">
+                    <option value="off" selected>No (menos distractores)</option>
+                    <option value="on">Sí</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="cfgBreathVoice">Voz en cada respiración</label>
+                  <select id="cfgBreathVoice">
+                    <option value="inicio" selected>Solo las primeras 3</option>
+                    <option value="todas">Todas</option>
+                    <option value="off">Apagada</option>
+                  </select>
+                </div>
+              </div>
+              <p id="p360Note" class="cfg-note">Respira 360: la duración total es la respiración guiada + 2 min de llegada y vuelta + 20 s de cierre (no usa la «Duración máxima» de la sesión). Basado en el documento «Protocolo Respira 360» (prototipo, a revisar por el equipo).</p>
               <p class="cfg-note">Opciones de diseño, no recomendaciones clínicas. No mide alcance; termina por tiempo.</p>
             </div>
           </section>
@@ -937,7 +992,7 @@
   </main>
 </div>
 
-<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.12.1 · prototipo no validado clínicamente</p>
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.12.2 · prototipo no validado clínicamente</p>
 <script type="module" src="./terapeuta.js"></script>
 <script>
 if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); }); }

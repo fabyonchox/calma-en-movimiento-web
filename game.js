@@ -5,6 +5,7 @@ import { Sfx } from './sfx.js';
 import { Spatial } from './audio3d.js';
 import { buildHandVisuals, updateHandBones, setHandLook } from './manos.js';
 import { SpaceScene } from './espacio.js';
+import { LandscapeScene } from './paisaje360.js';
 import { BreathScene } from './respira.js';
 import { NatureAmbience } from './musica.js';
 import { grassTexture, barkTexture, leafTexture, stoneTexture, waterTexture, wickerTexture, softShadow, organicSphere, addClouds, addGrassTufts, tintGround, addHorizon, addMeadowFlowers } from './ambiente.js';
@@ -850,6 +851,8 @@ function initThree() {
 // Domo de cielo con gradiente suave zen
 let gardenEnv = []; // objetos del paisaje del jardín (se desvanecen en el viaje por el espacio)
 let spaceScene = null;
+let landscapeScene = null; // Respira 360: paisaje 360° con respiración guiada
+let paisK = 0;
 let spaceK = 0;
 let gardenMats = null;
 let gardenFadeShown = 1;
@@ -1620,7 +1623,7 @@ function phaseModel() {
           title: '',
           titleSize: 22,
           lineSize: 26,
-          lines: [cfg.gameMode === 'breath' ? (breathScene && breathScene.stage === 'birds' ? 'Mira hacia la luz para llamar a los pajaritos.' : 'Sigue a la estrella con tu respiración.') : S.msgIdx === 0 && cfg.gameMode === 'fair' ? 'Toma una pelota y lánzala hacia los tarros.' : S.msgIdx === 0 && cfg.gameMode === 'apples' ? 'Toma la manzana y déjala en el canasto.' : MESSAGES[S.msgIdx]],
+          lines: [cfg.gameMode === 'breath' && cfg.breathContent === 'paisaje' ? 'Respira con la luz, a tu ritmo.' : cfg.gameMode === 'breath' ? (breathScene && breathScene.stage === 'birds' ? 'Mira hacia la luz para llamar a los pajaritos.' : 'Sigue a la estrella con tu respiración.') : S.msgIdx === 0 && cfg.gameMode === 'fair' ? 'Toma una pelota y lánzala hacia los tarros.' : S.msgIdx === 0 && cfg.gameMode === 'apples' ? 'Toma la manzana y déjala en el canasto.' : MESSAGES[S.msgIdx]],
           buttons: [{ id: 'pause', label: 'Pausa', secondary: true }],
           cols: 1,
         },
@@ -1920,6 +1923,7 @@ function onButton(id, c, isRemote = false) {
 const MODE_ORDER = ['apples', 'lights', 'fair', 'breath'];
 const MODE_NAME = { apples: '🍎 Manzano', lights: '🌸 Luces', fair: '🎪 Feria', breath: '🌙 Respira' };
 const isBreath = () => !!(S.cfg && S.cfg.gameMode === 'breath');
+const isPaisaje = () => isBreath() && S.cfg.breathContent === 'paisaje';
 const isFair = () => !!(S.cfg && S.cfg.gameMode === 'fair');
 
 function fairHost() {
@@ -2087,6 +2091,26 @@ function measureType(type, c) {
 
 /* ================= Lógica de Juego ================= */
 
+// Respira 360: el guía habla en cada fase; la voz de cada respiración según lo elegido en la tablet
+function makeLandscape() {
+  return new LandscapeScene(THREE, anchor, {
+    audioCtx: () => audioCtx,
+    soundOn: () => !!(S.cfg && S.cfg.feedback !== 'visual'),
+    onPhase: (name) => {
+      if (!guide) return;
+      const id = { llegada: 'p360_llegada', guiada: 'p360_guiada', vuelta: 'p360_vuelta', cierre: 'p360_cierre' }[name];
+      if (id) { guide.clear(); guide.say(id); }
+    },
+    onCycle: (n) => { S.spawned = n; broadcastMetrics(); },
+    onWord: (name, cycles) => {
+      const v = (S.cfg && S.cfg.breathVoice) || 'inicio';
+      if (!guide || v === 'off' || (v === 'inicio' && cycles >= 3)) return;
+      const w = { inhale: 'resp_inhala', inhale2: 'resp_un_poco_mas', exhale: 'resp_exhala', hold: 'resp_sosten' }[name];
+      if (w) guide.say(w, 'coach');
+    },
+  });
+}
+
 function startPlay() {
   S.dist = effectiveDistances(S.cfg, S.reach);
   if (isFair()) {
@@ -2094,7 +2118,11 @@ function startPlay() {
     if (!layoutFair()) { S.phase = 'ready'; return; }
     fairScene.start();
   }
-  if (isBreath() && breathScene) {
+  if (isPaisaje()) {
+    if (!landscapeScene) landscapeScene = makeLandscape();
+    landscapeScene.configure(S.cfg, S.eyeH);
+    landscapeScene.start();
+  } else if (isBreath() && breathScene) {
     breathScene.configure(S.cfg, S.eyeH);
     breathScene.start(performance.now());
   }
@@ -2108,6 +2136,7 @@ function handKey() { return S.cfg && (S.cfg.side === 'left' || S.cfg.side === 'b
 
 function guideInstruction() {
   if (!guide || !S.cfg) return;
+  if (isPaisaje()) { guide.say('inst_p360'); return; }
   if (isBreath()) { guide.say('inst_breath'); return; }
   guide.say('inst_' + (S.cfg.gameMode || 'apples') + '_' + handKey());
 }
@@ -2217,6 +2246,7 @@ function endPlay(early, reason) {
   // Feria: se limpia la zona (pelotas del suelo, tarros de vuelta, bandejas llenas).
   if (fairScene) fairScene.clear();
   if (breathScene) breathScene.stop();
+  if (landscapeScene) landscapeScene.stop();
   if (orb) orb.visible = false;
   if (sparkPoints) sparkPoints.visible = false;
   if (targetAppleGroup) targetAppleGroup.visible = false;
@@ -2430,7 +2460,8 @@ function update(dt, now) {
 
   // Guía: visible durante toda la sesión; se corre a la izquierda si hay un menú a la vista en el visor
   if (guide) {
-    guide.setVisible(guide.enabled() && !['idle', 'settle'].includes(S.phase));
+    // En Respira 360 el guía no se ve mientras se respira (menos distractores); su voz sí acompaña
+    guide.setVisible(guide.enabled() && !['idle', 'settle'].includes(S.phase) && !(isPaisaje() && ['play', 'pause'].includes(S.phase)));
     guide.setWide(menuPanel.mesh.visible);
     guide.setProgress(S.hits, S.cfg.reps, S.spawned, S.phase === 'play' || S.phase === 'pause');
     guide.update(dt);
@@ -2445,25 +2476,33 @@ function update(dt, now) {
   if (fairScene) fairScene.setVisible(isFairMode && fairScene.ready() && ['play', 'pause'].includes(S.phase));
   // Respira: estrella y pajaritos solo mientras se juega; el jardín se atenúa a un atardecer suave y vuelve después.
   const breathOn = isBreath() && ['play', 'pause'].includes(S.phase);
-  if (breathScene) breathScene.setVisible(breathOn);
+  const paisOn = breathOn && isPaisaje();
+  if (breathScene) breathScene.setVisible(breathOn && !paisOn);
   if (nature && S.cfg && S.cfg.ambient && session) {
     if (breathOn && nature.on) nature.stop();
     else if (!breathOn && !nature.on) nature.start();
   }
   // Viaje por el espacio durante la estrella: el jardín se desvanece de a poco y aparece el espacio (y al revés).
-  const spaceTarget = breathOn && breathScene && breathScene.stage === 'star' ? 1 : 0;
+  const spaceTarget = breathOn && !paisOn && breathScene && breathScene.stage === 'star' ? 1 : 0;
   if (spaceTarget > 0 && !spaceScene) spaceScene = new SpaceScene(THREE, anchor);
   if (spaceScene) {
     const before = spaceK;
     spaceK += Math.sign(spaceTarget - spaceK) * Math.min(Math.abs(spaceTarget - spaceK), dt * 0.22); // ~4,5 s
     if (spaceK !== before || spaceK > 0) {
       spaceScene.setAmount(spaceK);
-      setGardenFade(1 - spaceK);
       spaceScene.step(dt, breathScene ? breathScene.breathSize || 0.5 : 0.5);
     }
   }
+  // Respira 360: el jardín se desvanece y aparece el paisaje (~4 s); al terminar, vuelve el jardín
+  const paisTarget = paisOn ? 1 : 0;
+  if (landscapeScene) {
+    paisK += Math.sign(paisTarget - paisK) * Math.min(Math.abs(paisTarget - paisK), dt * 0.25);
+    landscapeScene.setVisible(paisK > 0);
+    landscapeScene.setAmount(paisK);
+  }
+  setGardenFade(1 - Math.max(spaceK, paisK));
   // Con la estrella, noche suave (más inmersivo); con los pajaritos, atardecer; fuera de Respira, día.
-  duskTo(breathOn ? (breathScene && breathScene.stage === 'star' ? 2 : 1) : 0, dt);
+  duskTo(breathOn && !paisOn ? (breathScene && breathScene.stage === 'star' ? 2 : 1) : 0, dt);
 
   if (S.phase !== 'play') return;
 
@@ -2475,7 +2514,7 @@ function update(dt, now) {
 
   // --- Juego activo ---
   S.activeMs += dt * 1000;
-  if (S.activeMs >= S.cfg.minutes * 60000 && !S.heldApple && !S.droppingApple && !(isFairMode && fairScene.holding())) {
+  if (!isPaisaje() && S.activeMs >= S.cfg.minutes * 60000 && !S.heldApple && !S.droppingApple && !(isFairMode && fairScene.holding())) {
     endPlay(false, 'time');
     return;
   }
@@ -2485,6 +2524,12 @@ function update(dt, now) {
   if (isBreath()) {
     if (orb) orb.visible = false;
     if (targetAppleGroup) targetAppleGroup.visible = false;
+    if (isPaisaje()) {
+      // Respira 360: termina sola al completar llegada, respiración guiada, vuelta a la calma y cierre
+      if (landscapeScene) landscapeScene.step(dt);
+      if (landscapeScene && landscapeScene.done) endPlay(false, 'time');
+      return;
+    }
     if (breathScene) breathScene.step(dt, headGaze());
     return;
   }
@@ -2804,7 +2849,7 @@ function loop() {
 
 initForm();
 
-export const APP_VERSION = '0.12.1';
-export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; }, get breathScene() { return breathScene; }, get spaceScene() { return spaceScene; }, get gardenEnv() { return gardenEnv; }, get spaceK() { return spaceK; }, startPlay,
+export const APP_VERSION = '0.12.2';
+export const __test = { S, update, onButton, phaseModel, enterVR, initThree, get camera() { return camera; }, get renderer() { return renderer; }, get scene() { return scene; }, DEFAULTS, baskets, controllers, get apple() { return targetAppleGroup; }, get fair() { return fairScene; }, get critters() { return critters; }, get guide() { return guide; }, get anchor() { return anchor; }, get breathScene() { return breathScene; }, get spaceScene() { return spaceScene; }, get gardenEnv() { return gardenEnv; }, get spaceK() { return spaceK; }, get landscapeScene() { return landscapeScene; }, get paisK() { return paisK; }, startPlay,
   // Vista previa del viaje por el espacio (k: 0..1) y del atardecer/noche (d: 0..2)
   previewSpace(k, d = 2, secs = 2) { if (!spaceScene) spaceScene = new SpaceScene(THREE, anchor); spaceK = k; spaceScene.setAmount(k); setGardenFade(1 - k); for (let i = 0; i < 60; i++) { duskTo(d, 0.2); spaceScene.step(secs / 60, 0.5); } } };
