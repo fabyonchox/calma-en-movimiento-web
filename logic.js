@@ -358,6 +358,28 @@ export function stepToward(pos, goal, speed, dt) {
   return { pos: { x: pos.x + dx / d * s, y: pos.y + dy / d * s, z: pos.z + dz / d * s }, arrived: false };
 }
 
+// Nivel 3: de dónde cae la manzana. Cuelga MÁS ARRIBA, entre las hojas (no se toma ahí: solo se mira caer), y a
+// distinta PROFUNDIDAD cada vez (cerca, media, lejos; siempre dentro del alcance cómodo), para que el paciente calcule
+// la distancia y el momento de atraparla mientras baja por la zona de alcance. Valores técnicos, a confirmar en el Quest.
+export const FALL_DEPTHS = [0.12, 1.0, 0.58]; // fracción del rango de alcance: cerca → lejos → media (se repite)
+// Altura de partida sobre los ojos: más alta cuanto más lejos, así se mira hacia arriba con un ángulo parecido (~35°)
+export const FALL_START_ABOVE = { min: 0.28, max: 0.58 };
+export function fallStart(cfg, dist, n = 0, rng = Math.random) {
+  const b = targetBounds(cfg, dist);
+  const eyeH = typeof cfg.eyeH === 'number' && cfg.eyeH > 0.5 ? cfg.eyeH : 1.15;
+  const f = FALL_DEPTHS[((n % FALL_DEPTHS.length) + FALL_DEPTHS.length) % FALL_DEPTHS.length];
+  const r = b.minD + (b.maxD - b.minD) * Math.min(1, Math.max(0, f + (rng() - 0.5) * 0.12));
+  const maxLat = Math.min(0.35, r * 0.55);
+  let lo = -maxLat; let hi = maxLat;
+  if (cfg.side === 'right') lo = -0.10 * maxLat;
+  else if (cfg.side === 'left') hi = 0.10 * maxLat;
+  const x = lo + rng() * (hi - lo);
+  const z = -Math.sqrt(Math.max(0.0025, r * r - x * x));
+  const fr = (r - b.minD) / Math.max(0.01, b.maxD - b.minD);
+  const y = Math.min(2.05, eyeH + FALL_START_ABOVE.min + (FALL_START_ABOVE.max - FALL_START_ABOVE.min) * fr + (rng() - 0.5) * 0.04);
+  return { x, y, z, r, band: f };
+}
+
 // Nivel 3: caída suave. Acelera poco a poco hasta una velocidad máxima baja.
 export function fallStep(vy, dt, speeds) {
   return Math.max(-speeds.fall, vy - speeds.accel * dt);

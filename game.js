@@ -13,7 +13,7 @@ import {
   DEFAULTS, ZONES, SIZES, MESSAGES, normalizeConfig, mergeConfig, REMOTE_KEYS, effectiveDistances, pickTarget,
   horizontalDistance, distance, formatTime, newRecord, buildCSV, buildSummary, sustainedReach,
   MEASURE_LABELS, MEASURE_KEY, sustainedPeak, validateMeasure, buildMeasure, describeMeasure,
-  APPLE_SPEEDS, APPLE_GROUND_Y, moveWaypoint, stepToward, fallStep, warnShake,
+  APPLE_SPEEDS, APPLE_GROUND_Y, moveWaypoint, stepToward, fallStep, fallStart, warnShake,
 } from './logic.js';
 import { VRPanel } from './vrui.js';
 import { Critters } from './critters.js';
@@ -2247,6 +2247,7 @@ function endPlay(early, reason) {
   if (fairScene) fairScene.clear();
   if (breathScene) breathScene.stop();
   if (landscapeScene) landscapeScene.stop();
+  showFallShadow(false);
   if (orb) orb.visible = false;
   if (sparkPoints) sparkPoints.visible = false;
   if (targetAppleGroup) targetAppleGroup.visible = false;
@@ -2273,6 +2274,21 @@ function finishRequested(isRemote) {
   }
 }
 
+// Sombra de la manzana en el pasto (nivel 3): ayuda a calcular la profundidad y cuánto falta para que llegue abajo
+let fallShadow = null;
+function showFallShadow(on) {
+  if (on && !fallShadow && anchor) { fallShadow = softShadow(THREE, 0.09, 0.55); anchor.add(fallShadow); }
+  if (fallShadow) { fallShadow.visible = !!on; if (on && S.target) updateFallShadow(S.target.pos); }
+}
+function updateFallShadow(p) {
+  if (!fallShadow || !fallShadow.visible) return;
+  const h = Math.max(0, p.y - 0.006);
+  fallShadow.position.set(p.x, 0.008, p.z);
+  const k = Math.max(0, Math.min(1, 1 - h / 2.2)); // más chica y más oscura cuanto más cerca del suelo
+  fallShadow.scale.setScalar(1.6 - 0.7 * k);
+  fallShadow.material.opacity = 0.25 + 0.45 * k;
+}
+
 function spawnTarget() {
   const t = pickTarget(S.cfg, S.dist, S.prevPos);
   S.target = t;
@@ -2293,6 +2309,15 @@ function spawnTarget() {
     t.start = { ...t.pos };
     t.goal = null;
     t.fall = lvl === 3 ? { state: 'hang', t: 0, vy: 0 } : null;
+    if (lvl === 3) {
+      // Cuelga más arriba, entre las hojas, y a otra profundidad cada vez (cerca, lejos, media): hay que calcular dónde y cuándo atraparla
+      const fs = fallStart({ ...S.cfg, eyeH: S.eyeH }, S.dist, S.spawned - 1);
+      t.pos = { x: fs.x, y: fs.y, z: fs.z };
+      t.start = { ...t.pos };
+      targetAppleGroup.position.set(t.pos.x, t.pos.y, t.pos.z);
+      updateAppleTwig(t.pos.y);
+    }
+    showFallShadow(lvl === 3);
     updateAppleTwig(t.pos.y);
     if (lvl === 2) targetAppleGroup.userData.twig.visible = false; // flota: ya no cuelga de la rama
     return;
@@ -2602,6 +2627,7 @@ function update(dt, now) {
           F.vy = fallStep(F.vy, dt, spd);
           T.pos.x = T.start.x; T.pos.z = T.start.z; T.pos.y += F.vy * dt;
           targetAppleGroup.position.set(T.pos.x, T.pos.y, T.pos.z);
+          updateFallShadow(T.pos);
           if (T.pos.y <= APPLE_GROUND_Y) { // llegó al suelo sin que la alcanzaran: se cuenta como no lograda, sin castigo
             T.hit = false;
             S.targetPoints.push({ x: T.start.x, y: T.start.y, z: T.start.z, hit: false });
@@ -2628,6 +2654,7 @@ function update(dt, now) {
         // Condición de Agarre (Reach + Grasp)
         if (canGrab && d < grabR && isControllerGrasping(ctrl)) {
           if (lvl === 3 && T.fall) S.reactTimes.push(Math.max(0, now - T.fall.startMs)); // tiempo de reacción desde que empezó a caer
+          showFallShadow(false);
           S.heldApple = {
             mesh: targetAppleGroup,
             ctrl: ctrl,
