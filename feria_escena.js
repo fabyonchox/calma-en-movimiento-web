@@ -1,5 +1,5 @@
 // Feria de juegos: escena 3D y manejo de manos/mandos. La física vive en feria_fisica.js.
-import { FairWorld, fairLayout, CAN, COUNTER, BIN, ballRadius } from './feria_fisica.js';
+import { FairWorld, fairLayout, fairVariant, CAN, COUNTER, BIN, ballRadius } from './feria_fisica.js';
 
 const BALL_COLORS = [0xffd166, 0xef8fa3, 0x7fd8be, 0x8ec5f0];
 const CAN_COLORS = [0x6fb7e0, 0xf2c14e, 0xe07a8a];
@@ -31,7 +31,9 @@ export class FairScene {
 
   // Calcula y dibuja la feria dentro del alcance cómodo. Devuelve false si el alcance no alcanza para armarla.
   configure(cfg, dist, eyeH) {
-    const layout = fairLayout(cfg, dist, eyeH);
+    this.dist = dist; this.eyeH = eyeH;
+    this.round = 0; this.pendingMove = false; this.hideUntil = 0;
+    const layout = fairLayout(cfg, dist, eyeH, fairVariant(cfg, 0));
     this.layout = layout;
     this.cfg = cfg;
     this.clearMeshes();
@@ -129,8 +131,52 @@ export class FairScene {
 
   /* ----- ciclo de una sesión ----- */
 
+  // Niveles 2 y 3: al rearmar, el puesto aparece en otro lugar (y en el nivel 3 con otra cantidad de tarros).
+  // Se espera a que no haya pelotas en las manos ni en el aire. Si el alcance no permite el nuevo lugar, se queda donde está.
+  moveStand(now) {
+    const w = this.world;
+    if (!w || !this.cfg) return false;
+    this.round = (this.round || 0) + 1;
+    // Si con el alcance de este paciente no cabe el desplazamiento completo, se prueba uno menor; si tampoco, se queda donde está.
+    const v = fairVariant(this.cfg, this.round);
+    let layout = null;
+    for (const k of [1, 0.6, 0.3]) {
+      const l = fairLayout(this.cfg, this.dist, this.eyeH, { shift: v.shift * k, count: v.count });
+      if (l.ok) { layout = l; break; }
+    }
+    if (!layout) return false;
+    this.layout = layout;
+    const ev = w.clearField(); // se recogen las pelotas (las lanzadas que faltaban se cuentan) y se rellenan las bandejas
+    ev.forEach((x) => { if (x.type === 'resolved') this.host.onResolved(x.ball); });
+    w.layout = layout;
+    w.reset();
+    this.clearMeshes();
+    this.buildStatics(layout);
+    this.holds.clear();
+    this.hideUntil = now + 450; // el puesto reaparece con un pequeño respiro, sin saltos bruscos
+    this.group.visible = false;
+    this.sync();
+    return true;
+  }
+
+  tryMove(now) {
+    const w = this.world;
+    if (!this.pendingMove || !w || this.holds.size || w.anyBallMoving()) return false;
+    this.pendingMove = false;
+    if (!this.moveStand(now)) return false;
+    return true;
+  }
+
   start() {
     if (!this.world) return;
+    this.round = 0;
+    if (this.cfg && this.layout && Number(this.cfg.fairLevel) > 1) {
+      // cada sesión parte del primer lugar y la primera cantidad
+      const l0 = fairLayout(this.cfg, this.dist, this.eyeH, fairVariant(this.cfg, 0));
+      if (l0.ok && (l0.counter.cx !== this.layout.counter.cx || l0.cans.length !== this.layout.cans.length)) {
+        this.layout = l0; this.world.layout = l0; this.clearMeshes(); this.buildStatics(l0);
+      }
+    }
     this.release_all(true);
     this.world.reset();
     this.sync();
@@ -185,6 +231,11 @@ export class FairScene {
       if (!ctrls.includes(c)) this.doRelease(c, ball, T);
     }
 
+    // El puesto vuelve a aparecer después del respiro de un cambio de lugar
+    if (this.hideUntil && now >= this.hideUntil) { this.hideUntil = 0; this.group.visible = true; }
+    // Cambio de lugar pendiente (niveles 2 y 3): se hace cuando no hay pelotas en las manos ni en el aire
+    if (this.tryMove(now)) return;
+
     // 2) Física
     const events = w.step(dt, T * 1000);
     for (const e of events) {
@@ -192,11 +243,13 @@ export class FairScene {
         this.host.onCan({ reach: e.reach, can: e.can });
         this.host.haptic(40, 0.4);
       } else if (e.type === 'clank' || e.type === 'land' || e.type === 'bounce' || e.type === 'rearm' || e.type === 'refill') {
+        if (e.type === 'rearm' && Number(this.cfg && this.cfg.fairLevel) > 1) this.pendingMove = true;
         this.host.sound(e.type, e);
       } else if (e.type === 'resolved') {
         this.host.onResolved(e.ball);
       }
     }
+    if (this.tryMove(now)) return; // si se rearmó este cuadro, el puesto ya aparece en su nuevo lugar
     this.sync(ctrls);
   }
 

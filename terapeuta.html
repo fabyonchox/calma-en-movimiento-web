@@ -648,6 +648,14 @@
           </div>
         </div>
         <div style="margin-bottom:12px;">
+          <label for="cfgFairLevel">Nivel de la Feria de Juegos</label>
+          <select id="cfgFairLevel">
+            <option value="1" selected>Nivel 1: tarros fijos</option>
+            <option value="2">Nivel 2: el puesto cambia de lugar (centro, derecha, izquierda)</option>
+            <option value="3">Nivel 3: cambia de lugar y aumenta la cantidad de tarros (3, 4, 5, 6)</option>
+          </select>
+        </div>
+        <div style="margin-bottom:12px;">
           <label for="cfgFairDist">Distancia de los tarros (solo Feria de Juegos)</label>
           <select id="cfgFairDist">
             <option value="near">Cerca (92 % del alcance cómodo)</option>
@@ -768,7 +776,7 @@
   </main>
 </div>
 
-<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.11.0 · prototipo no validado clínicamente</p>
+<p style="text-align:center; color:var(--muted); font-size:0.8rem; margin:18px 0 0;">Panel del kinesiólogo · versión 0.12.0 · prototipo no validado clínicamente</p>
 <script type="module" src="./terapeuta.js"></script>
 <script>
 if ('serviceWorker' in navigator) { window.addEventListener('load', function () { navigator.serviceWorker.register('./sw.js').catch(function () {}); }); }

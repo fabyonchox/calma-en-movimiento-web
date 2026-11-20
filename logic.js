@@ -32,6 +32,7 @@ export const DEFAULTS = {
   handLook: 'skin2', // aspecto de las manos en el visor: 'skin1' clara | 'skin2' media | 'skin3' oscura | 'glow' luminosa
   guide: 'on', // guía (luz con carita): 'on' | 'off'
   guideProgress: 'off', // ventanita '3 de 10' junto al guía en el visor: 'on' | 'off'
+  fairLevel: 1, // Feria: 1 tarros fijos | 2 el puesto cambia de lugar (centro, derecha, izquierda) | 3 además cambia la cantidad de tarros
   fairDist: 'mid', // Feria: distancia de los tarros: 'near' (92 % del alcance) | 'mid' (100 %) | 'far' (115 %)
   // Respira (opciones de diseño; el equipo define cuáles usar): ver respira_logica.js
   breathPattern: '4-6',
@@ -71,6 +72,7 @@ export function normalizeConfig(raw = {}) {
   c.limitReach = !!c.limitReach;
   c.guide = c.guide === 'off' || c.guide === false ? 'off' : 'on';
   c.guideProgress = c.guideProgress === 'on' || c.guideProgress === true ? 'on' : 'off';
+  c.fairLevel = [1, 2, 3].includes(Number(c.fairLevel)) ? Number(c.fairLevel) : DEFAULTS.fairLevel;
   c.fairDist = ['near', 'mid', 'far'].includes(c.fairDist) ? c.fairDist : DEFAULTS.fairDist;
   c.breathPattern = ['4-6', '5-5', '4-2-6', 'caja'].includes(c.breathPattern) ? c.breathPattern : DEFAULTS.breathPattern;
   c.neckRange = ['suave', 'medio', 'amplio'].includes(c.neckRange) ? c.neckRange : DEFAULTS.neckRange;
@@ -91,7 +93,7 @@ export function normalizeConfig(raw = {}) {
 }
 
 // Campos que la tablet del evaluador puede cambiar en el visor. Cualquier otro campo se ignora.
-export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'audio3d', 'handLook', 'appleLevel', 'appleSpeed', 'guide', 'guideProgress', 'fairDist', 'breathPattern', 'neckRange', 'breathContent'];
+export const REMOTE_KEYS = ['gameMode', 'zone', 'side', 'position', 'minutes', 'reps', 'dwell', 'size', 'feedback', 'limitReach', 'ambient', 'audio3d', 'handLook', 'appleLevel', 'appleSpeed', 'fairLevel', 'guide', 'guideProgress', 'fairDist', 'breathPattern', 'neckRange', 'breathContent'];
 
 // Mezcla la configuración actual del visor con la que manda la tablet y la normaliza.
 export function mergeConfig(current, incoming) {
@@ -285,6 +287,7 @@ export function pickTarget(cfg, dist, prev = null, rng = Math.random) {
 
 /* ---------- Cosecha del Manzano: niveles 2 y 3 ---------- */
 
+export const FAIR_LEVEL_ES = { 1: 'Nivel 1: tarros fijos', 2: 'Nivel 2: el puesto cambia de lugar', 3: 'Nivel 3: cambia de lugar y de cantidad de tarros' };
 export const APPLE_LEVEL_ES = { 1: 'Nivel 1: manzana fija', 2: 'Nivel 2: manzana que se mueve', 3: 'Nivel 3: manzana que cae' };
 
 // Velocidades pensadas para rehabilitación (nunca rápidas):

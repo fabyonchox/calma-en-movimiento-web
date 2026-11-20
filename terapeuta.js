@@ -1,8 +1,8 @@
 import { getSyncServerUrl, getSessionCode } from './sync-config.js';
-import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure, APPLE_LEVEL_ES } from './logic.js';
+import { formatTime, ZONES, DEFAULTS, END_REASONS, progressPercent, MEASURE_LABELS, describeMeasure, APPLE_LEVEL_ES, FAIR_LEVEL_ES } from './logic.js';
 import { PatientsPanel } from './pacientes.js';
 
-const APP_VERSION = '0.11.0';
+const APP_VERSION = '0.12.0';
 
 let ws = null;
 let currentRoom = getSessionCode() || 'HOSPITAL-1';
@@ -60,7 +60,7 @@ const MODE_ES = { apples: 'Cosecha del Manzano', lights: 'Jardín de Luces', fai
 const CFG_FIELDS = {
   gameMode: 'cfgMode', zone: 'cfgZone', side: 'cfgSide', position: 'cfgPos',
   minutes: 'cfgMin', reps: 'cfgReps', dwell: 'cfgDwell', size: 'cfgSize', feedback: 'cfgFeedback',
-  guide: 'cfgGuide', guideProgress: 'cfgGuideProgress', fairDist: 'cfgFairDist', audio3d: 'cfgAudio3d', handLook: 'cfgHandLook', appleLevel: 'cfgAppleLevel', appleSpeed: 'cfgAppleSpeed',
+  guide: 'cfgGuide', guideProgress: 'cfgGuideProgress', fairDist: 'cfgFairDist', audio3d: 'cfgAudio3d', handLook: 'cfgHandLook', appleLevel: 'cfgAppleLevel', appleSpeed: 'cfgAppleSpeed', fairLevel: 'cfgFairLevel',
   breathPattern: 'cfgBreathPattern', neckRange: 'cfgNeckRange', breathContent: 'cfgBreathContent',
 };
 
@@ -109,6 +109,7 @@ function fillForm(cfg, force = false) {
 // Nombre de la actividad; en la Cosecha del Manzano incluye el nivel (y la velocidad en los niveles 2 y 3)
 function modeLabel(c) {
   const base = MODE_ES[c.gameMode] || c.gameMode;
+  if (c.gameMode === 'fair') return base + ' · ' + FAIR_LEVEL_ES[Number(c.fairLevel) || 1];
   if (c.gameMode !== 'apples') return base;
   const lv = Number(c.appleLevel) || 1;
   return base + ' · ' + APPLE_LEVEL_ES[lv] + (lv > 1 ? ' (velocidad ' + (c.appleSpeed === 'medium' ? 'media' : 'lenta') + ')' : '');
